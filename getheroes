@@ -1,0 +1,1589 @@
+#!/usr/bin/env perl
+use utf8;
+use strict;
+use warnings;
+use JSON ();
+use Storable qw( dclone );
+
+my $json = JSON->new();
+#$json->boolean_values(0, 1);
+$json->indent(1);
+$json->canonical(1);
+open my $IN, '<', 'define.json' or die;
+local $/ = undef;
+my $defines = $json->decode(<$IN>);
+close $IN;
+
+my @hero_defines =
+   grep { $_->{name} !~ /^E\d+Y\d+$/ } @{$defines->{hero_defines}};
+my $heroes = build_index(\@hero_defines);
+my $effects = build_index($defines->{effect_defines});
+my $upgrades = build_index($defines->{upgrade_defines});
+my $hero_upgrades = build_multi_index($defines->{upgrade_defines}, 'hero_id');
+my $hero_loot = build_multi_index($defines->{loot_defines}, 'hero_id');
+my $hero_skins = build_multi_index($defines->{hero_skin_defines}, 'hero_id');
+my $hero_feats = build_multi_index($defines->{hero_feat_defines}, 'hero_id');
+my $attacks = build_index($defines->{attack_defines});
+my $graphics = build_index($defines->{graphic_defines});
+my $chest_types = build_index($defines->{chest_type_defines});
+get_feat_costs($defines->{hero_feat_defines},
+   $defines->{patron_shop_item_defines});
+
+my %stat_names = (
+   str => 'Strength',
+   dex => 'Dexterity',
+   con => 'Constitution',
+   int => 'Intelligence',
+   wis => 'Wisdom',
+   cha => 'Charisma',
+);
+
+my %groups = (
+   companion    => "Companions of the Hall",
+   forcegrey    => "Force Grey",
+   wafflecrew   => "Waffle Crew",
+   cteam        => "Acquisitions Incorporated: The “C” Team",
+   baldursgate  => "Heroes of Baldur's Gate",
+   aerois       => "Heroes of Aerois",
+   acqinc       => "Acquisitions Incorporated",
+);
+
+my %roles = (
+   dps => 'DPS',
+   tanking => 'Tanking',
+   healing => 'Healing',
+   support => 'Support',
+   gold => 'Gold',
+);
+
+my %rarity = (
+   1 => 'Common',
+   2 => 'Uncommon',
+   3 => 'Rare',
+   4 => 'Epic',
+);
+
+my %patron_currency  = (
+   1 => 'RubyCoins',
+   2 => 'SymbolOfVajra',
+);
+
+my %fixed_subst = (
+   50 => 50,
+   asharra_kir_sabal_desc => '',
+   azaka_attacks => 20,
+   azaka_time => 60,
+   dash_time_until_bonus_desc => '',
+   explosive_arrow_desc => '',
+   hordesperson_description => '',
+   jewel_thief_description => '',
+   orders_demand_desc => '',
+   unflinching_hatred_desc => '',
+   weretiger_description => '',
+);
+
+my %attack_subst = (
+   Donaar => {
+      'attack_indexed_effect_amount 0' => 3,
+      'attack_indexed_effect_amount 1' => 100,
+      'attack_indexed_effect_amount 2' => 50,
+      'attack_indexed_effect_amount 3' => 50,
+   },
+   Nrakk => { 'nrakk_ult_buffed 200' => 200 },
+   Ishi => { ishi_ult_time => 15 },
+   Wulfgar => { stun_chance => 20, stun_time => 5 },
+);
+
+my %effkey_ops = (
+   asharra_take_flight => 'mulstack',
+   bruenor_bounty_contribution => 'mul',
+   catti_bounty_contribution => 'mul',
+   chance_attack_adds_dot => 'mul',
+   damage_buff_on_upgrade_tag_targets => 'mul',
+   drizzt_bounty_contribution => 'mul',
+   global_dps_multiplier_mult_area_tags => 'mul',
+   global_dps_multiplier_mult_minus_targets => 'mul',
+   gold_mult_if_monsters_on_screen => 'mul',
+   gold_multiplier_mult => 'mul',
+   grant_temporary_hp_with_cooldown => 'heal',
+   heal => 'heal',
+   hero_dps_mult_by_upgrade_val => 'mulstack',
+   hero_dps_multiplier_from_temp_hp => 'mul',
+   increase_attack_cooldown_distributed => 'time',
+   increase_damage_from_attacks => 'mul',
+   increase_monster_damage_from => 'mul',
+   mirror_image_damage_increase => 'mulstack',
+   monster_with_tag_more_damage => 'mul',
+   owner_killing_blow_gold_bonus => 'mul',
+   reduce_damage_with_limit => 'heal',
+   regis_bounty_contribution => 'mul',
+   regis_healing => 'heal',
+   return_source_dps_when_hit => 'mul',
+   shandie_arrows => 'addstack',
+   single_target_damage_buff => 'mul',
+   spikey_bonus_attacks => 'mul',
+   time_scale_when_not_attacked => 'mul',
+   unflinching_hatred => 'mul',
+   walnut_jobs_done => 'mul',
+   wolfnut => 'heal',
+   wulfgar_bounty_contribution => 'mul',
+);
+
+my %amtfunc_ops = (
+   attacking_monsters => 'addstack',
+   per_any_tagged_crusader => 'addstack',
+   per_any_tagged_crusader_mult => 'mulstack',
+   per_mark_of_ki => 'addstack',
+   per_stat_diff_mult => 'mulstack',
+   per_tagged_crusader => 'addstack',
+   per_tagged_crusader_mult => 'mulstack',
+   per_target_crusader => 'addstack',
+   per_target_crusader_mult => 'mulstack',
+   per_target_loot_rarity_add => 'addstack',
+   unique_targets_attacking_monsters => 'addstack',
+);
+
+my %effkey_columns = (
+   bruenor_bounty_contribution => 'Bounty of the Hall',
+   catti_bounty_contribution => 'Bounty of the Hall',
+   drizzt_bounty_contribution => 'Bounty of the Hall',
+   regis_bounty_contribution => 'Bounty of the Hall',
+   wulfgar_bounty_contribution => 'Bounty of the Hall',
+);
+
+my %merge_buffs = (
+   # Asharra
+   'Bond: Humans' => 'Bond',
+   'Bond: Elves and Dwarves' => 'Bond',
+   'Bond: Tiefling, Firbolg, and Dragonborn' => 'Bond',
+   'Bond: Half-bloods' => 'Bond',
+   'Bond: Exotic Races' => 'Bond',
+   'Bond: Short-folk' => 'Bond',
+
+   # Azaka
+   'Mask of the Beast' => 'Mask of the Beast',
+
+   # Ishi
+   'Friend to Shorties' => 'Friend',
+   'Friend to Tall Monsters' => 'Friend',
+   'Friend to Tall Folk' => 'Friend',
+
+   # Minsc
+   'Favored Enemy: Humanoids' => 'Favored Enemy',
+   'Favored Enemy: Beasts' => 'Favored Enemy',
+   'Favored Enemy: Undead' => 'Favored Enemy',
+   'Favored Enemy: Fey' => 'Favored Enemy',
+   'Favored Enemy: Monstrosities' => 'Favored Enemy',
+
+   # Regis
+   'Ruby Encouragement' => 'Ruby Encouragement',
+   'Ruby Weakness' => 'Ruby Weakness',
+   'Ruby Amplification' => 'Ruby Amplification',
+);
+
+my $effect_keys = parse_effect_keys($defines->{effect_key_defines});
+
+mkdir 'rawheroes';
+mkdir 'heroes';
+
+open my $IDX, '>:utf8', 'heroes/Champions' or die;
+print $IDX <<END;
+== Champions list ==
+{| class="wikitable sortable" style="text-align:center"
+|-
+! Slot
+! data-sort-type="number"|{{Abbr|Cost|Initial cost of the champion}}
+! class="unsortable"|Icon
+! Name
+! data-sort-type="number"|{{Abbr|Damage|Base damage multiplied by all 'Damage' a
+bilities}}
+! data-sort-type="number"|{{Abbr|DmgAll|Multiplied Bonus of all 'Damage All' abi
+lities}}
+! Race
+! Class
+! {{Abbr|AL|Alignment}}
+! data-sort-type="number"|{{Abbr|Str|Strength}}
+! data-sort-type="number"|{{Abbr|Dex|Dexterity}}
+! data-sort-type="number"|{{Abbr|Con|Constitution}}
+! data-sort-type="number"|{{Abbr|Int|Intelligence}}
+! data-sort-type="number"|{{Abbr|Wis|Wisdom}}
+! data-sort-type="number"|{{Abbr|Cha|Charisma}}
+END
+
+foreach my $hero (@hero_defines) {
+   do_hero($hero);
+}
+
+print $IDX "|}\n";
+close $IDX;
+
+system 'diff -ur oldheroes heroes' if -d 'oldheroes';
+
+sub do_hero {
+   my ($hero) = @_;
+   my $filename = $hero->{name} or die;
+   $filename =~ s/\s+/_/g;
+   my $id = $hero->{id} or die;
+   print "$filename\n";
+   open my $OUT, '>:utf8', "heroes/$filename" or die;
+   open my $RAW, '>:utf8', "rawheroes/$filename" or die;
+   print $RAW "Hero $filename ", $json->encode($hero), "\n";
+   show_header($OUT, $hero);
+
+   if (my $permanents = $hero->{properties}{permanent_effects}) {
+      foreach my $perm (@$permanents) {
+         my $eff = parse_effect($perm);
+         print $RAW "Permanent ", $json->encode($eff), "\n";
+      }
+   }
+
+   $hero->{_milestones} = [{ _level => 1, _cost => sci($hero->{base_cost}) }];
+   $hero->{_cost} = $hero->{_total_cost} = $hero->{base_cost};
+
+   do_bonus($hero, {}, 'Damage', 'base', $hero->{base_damage});
+   do_bonus($hero, {}, 'Damage All', 'base', undef);
+   do_bonus($hero, {}, 'Health', 'base', $hero->{base_health});
+   do_base_attack($hero, {}, $hero->{base_attack_id});
+
+   if (my $upgrades = $hero_upgrades->{$id}) {
+      @$upgrades = sort { $a->{required_level} <=> $b->{required_level}
+         || $a->{id} <=> $b->{id} } @$upgrades;
+      foreach my $upg (@$upgrades) {
+         $upg->{_effect} = parse_effect($upg->{effect});
+         do_upgrade($hero, $upg);
+      }
+      foreach my $upg (@$upgrades) {
+         my $name = $upg->{name} || $upg->{specialization_name} || '';
+         print $RAW "Upgrade $upg->{required_level} $name ",
+            $json->encode($upg), "\n";
+      }
+   }
+
+   show_abilities($OUT, $hero);
+   show_bond($OUT, $hero);
+   show_milestones($OUT, $hero);
+
+   print $RAW "Milestones ", $json->encode($hero->{_milestones}), "\n";
+   print $RAW "Columns ", $json->encode($hero->{_cols}), "\n";
+
+   if (my $loot = $hero_loot->{$id}) {
+      show_loot($OUT, $hero, $loot);
+      foreach my $item (@$loot) {
+         print $RAW "Loot $item->{slot_id} $item->{rarity} ",
+            $json->encode($item), "\n";
+      }
+   }
+
+   if (my $feats = $hero_feats->{$id}) {
+      show_feats($OUT, $hero, $feats);
+      foreach my $feat (@$feats) {
+         print $RAW "Feat ", $json->encode($feat), "\n";
+      }
+   }
+
+   show_trailer($OUT, $hero);
+}
+
+sub do_upgrade {
+   my ($hero, $upg) = @_;
+   my $level = $upg->{required_level};
+   return if $level >= 9999;
+   my $old_level = $hero->{_milestones}[-1]{_level};
+   if ($level > $old_level) {
+      my $curve = $hero->{cost_curves};
+      die if keys(%$curve) > 1;
+      my $mult = $curve->{1} or die;
+      my $tot = 0;
+      while ($old_level < $level) {
+         $old_level++;
+         $tot += int($hero->{_cost} + 0.5);
+         $hero->{_cost} *= $mult;
+      }
+      push @{$hero->{_milestones}}, { _level => $level, _cost => sci($tot) };
+      $hero->{_total_cost} += $tot;
+   }
+
+   $upg->{_req} = '';
+   $upg->{name} =~ s/\{(.*?)\}#([0-9a-fA-F]{3})/{{Color|$2|$1}}/g;
+   $upg->{_unlock} = $upg->{name};
+   $upg->{_effect}{_col} = $upg->{name} if $upg->{name};
+
+   my $spec = $upg->{specialization_name};
+   if ($spec) {
+      $spec =~ s/\?//g;
+      my $mile = $hero->{_milestones}[-1];
+      push @{$hero->{_specs}}, [] unless $mile->{_specs};
+      push @{$hero->{_specs}[-1]}, $spec;
+      push @{$mile->{_specs}}, $spec;
+      $upg->{_req} = $spec;
+      $upg->{_unlock} = '';
+      $upg->{_bond} = 1 if $spec =~ /^Bond:/;
+   }
+
+   if (my $rid = $upg->{required_upgrade_id}) {
+      my $req = $upgrades->{$rid} or die;
+      $upg->{_req} = $req->{specialization_name} || $req->{name};
+      $upg->{_req} =~ s/\?//g;
+   }
+
+   do_effect($hero, $upg, $upg->{_effect});
+
+   if ($spec) {
+      my $old = $hero->{_abils}{$spec};
+      $hero->{_abils}{$spec} = "'''{{Spec|$spec}}'''\n\n";
+      my $desc = $upg->{specialization_description};
+      my $eff = $upg->{_effect};
+      my $more = $eff->{_desc} ||= effect_string($hero, $eff);
+      if ($more) {
+         if ($desc) {
+            $desc =~ s/(\w)\s*$/$1./;
+            $desc .= ' ';
+         }
+         $desc .= $more;
+      }
+      $hero->{_abils}{$spec} .= $desc . "\n\n" if $desc;
+      $hero->{_abils}{$spec} .= $old if $old;
+   }
+
+   if (my $unlock = $upg->{_unlock}) {
+      my $eff = $upg->{_effect};
+      my $desc = $eff->{_desc} ||= effect_string($hero, $eff);
+      do_unlock($hero, $upg, $unlock, 'Ability', $upg->{tip_text}, $desc);
+   }
+}
+
+sub do_effect {
+   my ($hero, $upg, $eff) = @_;
+   my $key = $eff->{_key} or die;
+   my $params = $eff->{_params};
+   my $amt = $params->{amount};
+   $eff->{_cond} = 1 if $eff->{targets};
+   if (my $op = $eff->{_op}) {
+      if ($op eq 'mul') {
+         do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, '%');
+      }
+      elsif ($op eq 'add') {
+         do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, '', '+' . $amt);
+      }
+      elsif ($op eq 'mulstack') {
+         do_bonus($hero, $upg, $eff->{_col}, 'basepow', $amt);
+      }
+      elsif ($op eq 'addstack') {
+         do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, '%×n', $amt . '%');
+      }
+      elsif ($op eq 'heal') {
+         do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, '');
+      }
+      elsif ($op eq 'time') {
+         do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, 's');
+      }
+   }
+   elsif ($key eq 'add_attack_targets') {
+      my $id = $params->{optional_attack_id} || $hero->{base_attack_id};
+      my $att = $attacks->{$id} or die;
+      do_bonus($hero, $upg, "$att->{name} Targets", 'add', $params->{amount});
+   }
+   elsif ($key eq 'add_monster_hit_effects') {
+      do_monster_effect($hero, $upg, $params, $eff->{monster_effect});
+   }
+   elsif ($key eq 'buff_upgrade') {
+      do_buff_upgrade($hero, $upg, $params->{id}, $amt,
+         $params->{optional_effect_index}) unless $eff->{_cond};
+   }
+   elsif ($key eq 'buff_upgrade_base_stack') {
+      my $targ = $upgrades->{$params->{id}} or die;
+      do_bonus($hero, $upg, $targ->{name}, 'pow', $amt);
+   }
+   elsif ($key eq 'buff_upgrades') {
+      foreach my $id (@{$params->{ids}}) {
+         do_buff_upgrade($hero, $upg, $id, $amt);
+      }
+   }
+   elsif ($key eq 'buff_ultimate') {
+      do_bonus($hero, $upg, $hero->{_ult}{$upg->{_req}}, 'mul', $amt);
+   }
+   elsif ($key eq 'change_base_attack') {
+      do_base_attack($hero, $upg, $params->{attack_id});
+   }
+   elsif ($key eq 'change_upgrade_base_amount') {
+      my $targ = $upgrades->{$params->{id}} or die;
+      do_bonus($hero, $upg, $targ->{name}, 'basepow', $amt);
+   }
+   elsif ($key eq 'effect_def') {
+      do_effect_def($hero, $upg, $eff);
+   }
+   elsif ($key eq 'global_dps_multiplier_mult') {
+      do_bonus($hero, $upg, 'Damage All', 'mul', $amt);
+   }
+   elsif ($key eq 'health_add') {
+      do_bonus($hero, $upg, 'Health', 'add', $amt);
+   }
+   elsif ($key eq 'health_mult') {
+      do_bonus($hero, $upg, 'Health', 'mul', $amt, '%');
+   }
+   elsif ($key eq 'hero_dps_multiplier_mult') {
+      if ($eff->{_cond}) {
+         do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, '%') if $amt;
+      }
+      else {
+         do_bonus($hero, $upg, 'Damage', 'mul', $amt);
+      }
+   }
+   elsif ($key eq 'mirror_image') {
+      do_mirror($hero, $upg, $eff);
+   }
+   elsif ($key eq 'set_ultimate_attack') {
+      do_ultimate($hero, $upg, $params->{attack_id});
+   }
+}
+
+sub do_mirror {
+   my ($hero, $upg, $eff) = @_;
+   my $name = $upg->{name};
+   my $tagsrc = $eff->{tagged_effects} or die;
+   my (@cols, @desc);
+   foreach my $tag (sort keys %$tagsrc) {
+      $eff->{_tageff}{$tag} = my $tageff = parse_effect($tagsrc->{$tag});
+      my $amt = $tageff->{_params}{amount};
+      my $col;
+      if ($tag eq 'dps') {
+         push @desc, "*DPS: Increases the Champion's Damage by $amt%";
+         $col = "$name: DPS";
+         do_bonus($hero, $upg, $col, 'base', $amt, '%');
+      }
+      elsif ($tag eq 'support') {
+         push @desc, "*Support: Increases the damage of all Champions by $amt%";
+         $col = "$name: Support";
+         do_bonus($hero, $upg, $col, 'base', $amt, '%');
+      }
+      elsif ($tag eq 'tanking') {
+         push @desc, "*Tanking: Increases all incoming healing by $amt HP";
+         $col = "$name: Tanking";
+         do_bonus($hero, $upg, $col, 'base', $amt, '');
+      }
+      else {
+         die $tag;
+      }
+      push @cols, $col;
+   }
+   $eff->{_col} = \@cols;
+   $eff->{_params}{mirror_image_desc} = join("\n", @desc);
+}
+
+sub do_ultimate {
+   my ($hero, $upg, $id) = @_;
+   my $att = $attacks->{$id} or die;
+   $upg->{_unlock} = '';
+   $hero->{_ult}{$upg->{_req}} = $att->{name};
+   $upg->{_bud} = $att->{damage_modifier} * $att->{cooldown};
+   my $desc = attack_desc($hero, $att);
+   my $long = attack_desc($hero, $att, 1);
+   do_unlock($hero, $upg, $att->{name}, 'Ultimate Attack', $desc, $long);
+   do_bonus($hero, $upg, $att->{name}, 'base', $upg->{_bud}, '×BUD')
+      if $upg->{_bud};
+   $upg->{_unlock} = '';
+   foreach my $anim (@{$att->{animations}}) {
+      my $id = $anim->{attack_id} or next;
+      do_base_attack($hero, $upg, $id);
+   }
+}
+
+sub do_monster_effect {
+   my ($hero, $upg, $params, $eff) = @_;
+   my $key = $eff->{_key} or return;
+   if (my $op = $eff->{_op}) {
+      if ($op eq 'mulstack') {
+         do_bonus($hero, $upg, $upg->{name}, 'basepow', $params->{amount});
+      }
+   }
+   elsif ($key eq 'effect_def') {
+      foreach my $effdef (@{$eff->{_effects}}) {
+         foreach my $effkey (@{$effdef->{effect_keys}}) {
+            do_monster_effect($hero, $upg, $params, $effkey);
+         }
+      }
+   }
+   elsif ($key eq 'increase_monster_damage_if_from_attacks') {
+      do_bonus($hero, $upg, $upg->{name}, 'base', $params->{amount}, '%');
+   }
+}
+
+sub do_buff_upgrade {
+   my ($hero, $upg, $id, $amount, $index) = @_;
+   return unless $amount;
+   my $eff = $upgrades->{$id}{_effect} or die;
+   if ($eff->{_key} eq 'effect_def') {
+      my $effects = $eff->{_effects};
+      my $effdef;
+      if (@$effects > 1) {
+         $effdef = $effects->[$index // 0] or die;
+         $index = undef;
+      }
+      else {
+         $effdef = $effects->[0];
+      }
+      my $props = $effdef->{properties};
+      $index = 0 unless $props->{indexed_effect_properties};
+      $index //= $props->{default_bonus_index} // 0;
+      $eff = $effdef->{effect_keys}[$index] or die;
+   }
+   push @{$eff->{_buffed_by}}, $upg->{id};
+   my $col = $eff->{_col};
+   if (ref $col) {
+      for my $c (@$col) {
+         do_bonus($hero, $upg, $c, 'mul', $amount);
+      }
+   }
+   else {
+      do_bonus($hero, $upg, $col, 'mul', $amount);
+   }
+}
+
+sub do_effect_def {
+   my ($hero, $upg, $eff) = @_;
+   my $count = 0;
+   my (@desc, %seen);
+   for my $effdef (@{$eff->{_effects}}) {
+      my $effkeys = $effdef->{effect_keys};
+      my $props = $effdef->{properties};
+      my $index = $props->{default_bonus_index} // 0;
+      $effkeys->[$index]{_col} = $props->{effect_name} || $upg->{name}
+         if $index < @$effkeys;
+      my $rules = $effdef->{requirements};
+      $rules = $rules && @$rules;
+
+      foreach my $effkey (@$effkeys) {
+         my $key = $effkey->{_key};
+         $effkey->{_col} ||= $effkey_columns{$key} || $key;
+         if ($seen{$effkey->{_col}}) {
+            $effkey->{_col} .= ' ' . $count;
+         }
+         $seen{$effkey->{_col}} = 1;
+         $count++;
+         $effkey->{_cond} = 1 if $rules;
+         do_effect($hero, $upg, $effkey);
+         do_bond($hero, $upg, $effkey) if $upg->{_bond};
+      }
+
+      if (my $desc = effect_string($hero, $effdef)) {
+         push @desc, $desc;
+      }
+   }
+   $eff->{_desc} = join('<br>', @desc) if @desc;
+}
+
+sub do_unlock {
+   my ($hero, $upg, $name, $type, $desc, $longdesc, $nomile) = @_;
+   return unless $name;
+   my $req = $upg->{_req} || '';
+   my $mile = $hero->{_milestones}[-1];
+   if (my $merge = $merge_buffs{$name}) {
+      return if $mile->{_unlock};
+      $name = $merge;
+      $req = '';
+   }
+
+   $longdesc ||= $desc;
+   my $ind = $req ? ':' : '';
+   my $abils = $hero->{_abils} ||= {};
+   $abils->{$req} .= "$ind'''$name - $type'''\n\n";
+   $abils->{$req} .= "$ind$longdesc\n\n" if $longdesc;
+
+   unless ($nomile) {
+      $desc ||= $longdesc || '';
+      $desc =~ s/\n.*//s;
+      $name = "{{Abbr|$name|$desc}}" if $desc;
+      $name = "{{Spec|$req|$name}}" if $req;
+      push @{$mile->{_unlock}}, $name;
+   }
+}
+
+sub do_bonus {
+   my ($hero, $upg, $name, $op, $val, $unit, $disp) = @_;
+   return unless $name;
+   die if ref $name;
+   my $req = $upg->{_req} || '';
+   my $cols = $hero->{_cols} ||= {};
+   my $mile = $hero->{_milestones}[-1];
+   if (my $merge = $merge_buffs{$name}) {
+      return if $mile->{$merge};
+      return if $op eq 'base' && $cols->{$merge};
+      $name = $merge;
+      $req = '';
+   }
+
+   my $abil = $cols->{$name};
+   if ($abil) {
+      $abil->{_count}++;
+   }
+   else {
+      push @{$hero->{_order}}, $name;
+      $abil = $cols->{$name} = { };
+   }
+   my $info = $abil->{$req} ||= {};
+
+   if ($op eq 'base') {
+      $info->{base} = $val;
+      $info->{unit} = $unit ||= '';
+      return unless defined $val;
+      $disp ||= sci($val) . $unit;
+   }
+   elsif ($op eq 'mul') {
+      $info->{mul} //= 1;
+      $info->{mul} *= $val / 100 + 1;
+      $disp = "+$val%";
+   }
+   elsif ($op eq 'add') {
+      $info->{add} += $val;
+      $disp = "+$val";
+   }
+   elsif ($op eq 'basepow') {
+      $info->{base} = 100;
+      $info->{pow} = $val / 100;
+      $info->{unit} = sprintf("%%×(%.4gⁿ−1)", $info->{pow} + 1);
+      $disp = "$val%";
+   }
+   elsif ($op eq 'pow') {
+      $info->{pow} *= $val / 100 + 1;
+      $info->{unit} = sprintf("%%×(%.4gⁿ−1)", $info->{pow} + 1);
+      $disp = "Base +$val%";
+   }
+
+   if (defined $disp) {
+      if ($op !~ /^base/) {
+         my $val = calc_total($abil, $req);
+         $disp = "{{Abbr|$disp|Total $val}}" if $val;
+      }
+      $disp = "{{Spec|$req|$disp}}" if $req;
+      push @{$mile->{$name}}, $disp;
+   }
+}
+
+sub do_base_attack {
+   my ($hero, $upg, $att_id) = @_;
+   my @ids = ( $att_id );
+   my $seen = $hero->{_seen_attacks} ||= { };
+   while (@ids) {
+      $att_id = shift @ids or next;
+      next if $seen->{$att_id};
+      $seen->{$att_id} = 1;
+      my $att = $attacks->{$att_id} or die;
+      if ($att_id == 39) { # kludge for hitch's thrown dagger
+         do_bonus($hero, $upg, "$att->{name} Targets", 'add',
+            $att->{num_targets});
+      }
+      else {
+         my $name = "$att->{name} Targets";
+         do_bonus($hero, $upg, $name, 'base', $att->{num_targets})
+            unless $hero->{_cols}{$name};
+      }
+      my $desc = attack_desc($hero, $att);
+      my $long = attack_desc($hero, $att, 1);
+      do_unlock($hero, $upg, $att->{name}, 'Base Attack', $desc, $long, 1);
+      foreach my $anim (@{$att->{animations}}) {
+         if (my $upd = $anim->{update_base_attack_after}) {
+            push @ids, $upd;
+         }
+      }
+   }
+}
+
+sub attack_desc {
+   my ($hero, $att, $long) = @_;
+   my $desc = $long ? $att->{long_description} : $att->{description} or return;
+   $desc =~ s/\$attack_num_targets\b/$att->{num_targets}/g;
+   if (my $subst = $attack_subst{$hero->{name}}) {
+      $desc =~ s{\$(\w+)}{$subst->{$1} // $&}eg;
+      $desc =~ s{\$\((.*?)\)}{$subst->{$1} // $&}eg;
+   }
+   return $desc;
+}
+
+sub calc_total {
+   my ($abil, $req) = @_;
+   my $mods = $abil->{$req} or return;
+   my $plain = $req ? $abil->{''} : {};
+   if (my $val = $mods->{base} || $plain->{base}) {
+      $val += $mods->{add} || 0;
+      $val += $plain->{add} || 0;
+      $val *= $plain->{mul} || 1;
+      $val *= $mods->{mul} || 1;
+      return sci($val) . ($mods->{unit} // $plain->{unit} // '');
+   }
+   elsif ($val = $mods->{mul}) {
+      $val *= $plain->{mul} || 1;
+      return sci($val * 100 - 100) . '%';
+   }
+   elsif ($val = $mods->{add}) {
+      $val += $plain->{add} || 0;
+      return '+' . sci($val);
+   }
+   return;
+}
+
+sub do_bond {
+   my ($hero, $upg, $eff) = @_;
+   my $filt = $eff->{filter_targets} or return;
+   my $want = $filt->[0]{tags} or return;
+   my %want;
+   $want{$_} = 1 foreach split /\|/, $want;
+   my $bond = $hero->{_bond}{$upg->{_req}} ||= { };
+   for my $friend (@hero_defines) {
+      next unless grep { $want{$_} } @{$friend->{tags}};
+      push @{$bond->{$friend->{seat_id}}}, $friend->{name};
+      $hero->{_bond}{_count}{$friend->{name}}++;
+   }
+}
+
+sub show_header {
+   my ($OUT, $hero) = @_;
+   my $att = $attacks->{$hero->{base_attack_id}} or die;
+   my $ult = $attacks->{$hero->{ultimate_attack_id}} or die;
+   my $char = $hero->{character_sheet_details} or die;
+   my $stat = $char->{ability_scores} or die;
+   my $age = int($char->{age});
+
+   my $group = '';
+   my $role = '';
+   foreach my $tag (@{$hero->{tags}}) {
+      if ($groups{$tag}) { $group = $groups{$tag} }
+      if ($roles{$tag}) { $role .= ' / ' if $role; $role .= $roles{$tag} }
+   }
+
+print $OUT <<END;
+{{Champion
+| name = $hero->{name}
+END
+
+   my $num = 0;
+   if (my $skins = $hero_skins->{$hero->{id}}) {
+      foreach my $skinfo (@$skins) {
+         print $OUT "| skin", ++$num, " = $skinfo->{name}\n";
+      }
+   }
+
+print $OUT <<END;
+| class = $char->{class}
+| race = $char->{race}
+| age = $age
+| alignment = $char->{alignment}
+| role = $role
+| group = $group
+| str = $stat->{str} | dex = $stat->{dex} | con = $stat->{con}
+| int = $stat->{int} | wis = $stat->{wis} | cha = $stat->{cha}
+| base_cooldown = $att->{cooldown}
+| ulti_cooldown = $ult->{cooldown}
+END
+
+   $num = 0;
+   foreach my $other (@hero_defines) {
+      next if $other->{seat_id} != $hero->{seat_id} || $other == $hero;
+      print $OUT "| swap", ++$num, " = $other->{name}\n";
+   }
+
+print $OUT <<END;
+}}
+
+'''$char->{full_name}''' is one of the [[champions]] of [[Idle Champions of the Forgotten Realms]].
+
+==Backstory==
+{{Quote|$char->{backstory}}}
+
+END
+}
+
+sub show_abilities {
+   my ($OUT, $hero) = @_;
+   my $abil = $hero->{_abils} or return;
+   print $OUT "==Abilities==\n", ($abil->{''} || '');
+   my $specsets = $hero->{_specs};
+   my $num;
+   foreach my $specs (@$specsets) {
+      my $choice = @$specsets < 2 ? '' : ' ' . ++$num;
+      print $OUT "'''<u>Specialization Choice$choice</u>'''\n\n";
+      foreach my $spec (@$specs) {
+         print $OUT $abil->{$spec} || '';
+      }
+   }
+}
+
+sub show_bond {
+   my ($OUT, $hero) = @_;
+   my $bond = $hero->{_bond} or return;
+
+   foreach my $friend (@hero_defines) {
+      next if $friend == $hero;
+      push @{$bond->{'No Bond'}{$friend->{seat_id}}}, $friend->{name}
+         unless $bond->{_count}{$friend->{name}};
+   }
+
+   my @cols = map @$_, @{$hero->{_specs}};
+   push @cols, 'No Bond' if $bond->{'No Bond'};
+   print $OUT qq[{| class="wikitable"\n|-\n! Slot\n];
+   foreach my $col (@cols) {
+      (my $colname = $col) =~ s/^.*:\s*//;
+      print $OUT qq[! style="width:7em" | $colname\n];
+   }
+   for my $slot (1 .. 12) {
+      my $style = $slot == 6 ? ' style="background-color:#333"' : '';
+      print $OUT "|- align=center$style\n| $slot\n";
+      for my $col (@cols) {
+         if (my $names = $bond->{$col}{$slot}) {
+            print $OUT "| ", join('<br>', map { "[[$_]]" } @$names), "\n";
+         }
+         else {
+            print $OUT "|\n";
+         }
+      }
+   }
+   print $OUT "|}\n\n";
+}
+
+sub show_milestones {
+   my ($OUT, $hero) = @_;
+   my $abils = $hero->{_cols};
+   my $order = $hero->{_order};
+   @$order = grep { $abils->{$_}{_count} } @$order;
+
+   my $milestones = $hero->{_milestones};
+   foreach my $mile (@$milestones) {
+      my $spec = $mile->{_specs} or next;
+      push @{$mile->{_unlock}}, '{{Abbr|Specialization Choice|'
+         . join(' or ', @$spec) . '}}';
+   }
+
+   MILE: foreach my $mile (@$milestones) {
+      next unless $mile->{_unlock};
+      foreach my $col (@$order) {
+         next MILE unless $mile->{$col};
+      }
+      my $new = 'Ability';
+      my $n = 1;
+      while ($abils->{$new}) {
+         $new = 'Ability ' . ++$n;
+      }
+      push @$order, $new;
+      last;
+   }
+
+print $OUT <<END;
+==Upgrades==
+{| class="wikitable levels-table" style="text-align:center"
+|-
+! width="75px" | Level
+! width="75px" | {{Abbr|Cost|Cost in gold from previous row}}
+END
+   print $OUT "! $_\n" foreach @$order;
+
+   foreach my $mile (@$milestones) {
+      my @cols;
+      foreach my $col (@$order) {
+         if (my $val = $mile->{$col}) {
+            push @cols, ' ' . join('<br>', @$val);
+         }
+         else {
+            push @cols, '';
+         }
+      }
+
+      if (my $unlock = $mile->{_unlock}) {
+         my $left = 0;
+         my $left_wid = 0;
+         my $wid = 0;
+         my $best_left = 0;
+         my $best_wid = 0;
+         for my $right (0 .. $#cols) {
+            if ($cols[$right]) {
+               $wid = 0;
+               $left = $right + 1;
+            }
+            else {
+               $wid++;
+               if ($wid > $best_wid) {
+                  $best_left = $left;
+                  $best_wid = $wid;
+                  $left_wid = $wid if $left == 0;
+               }
+            }
+         }
+         if ($left_wid) { $best_left = 0; $best_wid = $left_wid; }
+         die unless $best_wid;
+         splice @cols, $best_left, $best_wid,
+            " colspan=$best_wid | Unlock " . join(' or ', @$unlock);
+      }
+
+      print $OUT "|-\n| $mile->{_level}\n| $mile->{_cost}\n";
+      print $OUT "|$_\n" foreach @cols;
+   }
+
+   my $total = sci($hero->{_total_cost});
+   my @specs = map @$_, @{$hero->{_specs}};
+   print $OUT
+      '|- style="background:#181818;border:4px;border-top-style:double"',
+      "\n| '''Total:'''\n| $total\n";
+   for my $col (@$order) {
+      if (my $abil = $hero->{_cols}{$col}) {
+         my @tot;
+         if ($abil->{''} && !all_specs($abil, $hero->{_specs})) {
+            my $tot = calc_total($abil, '') or next;
+            push @tot, $tot;
+         }
+         foreach my $spec (@specs) {
+            next unless $abil->{$spec};
+            my $tot = calc_total($abil, $spec) or next;
+            push @tot, "{{Spec|$spec|$tot}}";
+         }
+         print $OUT "| ", join('<br>', @tot), "\n";
+      }
+      else {
+         print $OUT "|\n";
+      }
+   }
+   print $OUT "|}\n\n";
+}
+
+sub all_specs {
+   my ($abil, $specs) = @_;
+   GROUP: foreach my $group (@$specs) {
+      foreach my $spec (@$group) {
+         next GROUP unless $abil->{$spec};
+      }
+      return 1;
+   }
+   return 0;
+}
+
+sub show_loot {
+   my ($OUT, $hero, $loot) = @_;
+   my (%loot, $toomany);
+   foreach my $item (@$loot) {
+      my $effects = $item->{effects} or next;
+      foreach my $eff (@$effects) {
+         parse_effect($eff);
+         $eff->{_desc} = effect_string($hero, $eff);
+         $item->{_icon} = get_graphic($item->{graphic_id});
+      }
+      $loot{$item->{slot_id}}{$item->{rarity}} = $item;
+   }
+
+   foreach my $slot (values %loot) {
+      my (@prefix, @suffix);
+      $slot->{_icon} = '';
+      foreach my $rarity (1 .. 4) {
+         my $item = $slot->{$rarity} or next;
+         $slot->{_icon} = $item->{_icon} if $item->{_icon};
+         my $effects = $item->{effects} or next;
+         $toomany = 1 if @$effects > 1;
+         for my $i (0 .. $#$effects) {
+            my $desc = $effects->[$i]{_desc} or next;
+            $prefix[$i] = common_prefix($desc, $prefix[$i]);
+            $suffix[$i] = common_prefix(scalar(reverse $desc), $suffix[$i]);
+         }
+      }
+      s/\d+$// foreach @suffix;
+      $slot->{_pref_len} = [ map length, @prefix ];
+      $slot->{_suff_len} = [ map length, @suffix ];
+      foreach my $pref (@prefix) {
+         $pref =~ s/\s+$//;
+         $pref =~ s/\s+by$//;
+      }
+      foreach my $suff (@suffix) {
+         $suff = reverse $suff;
+         $suff =~ s/\.$//;
+         $suff = 's' if $suff =~ /^ seconds?$/;
+      }
+      $slot->{_prefix} = \@prefix;
+      $slot->{_suffix} = \@suffix;
+   }
+
+   if ($toomany) { show_loot_table($OUT, \%loot) }
+   else { show_loot_template($OUT, \%loot) }
+}
+
+sub common_prefix {
+   my ($s1, $s2) = @_;
+   return $s1 unless defined $s2;
+   return $s2 unless defined $s1;
+   my $n = length($s1);
+   my $i = length($s2);
+   $n = $i if $i < $n;
+   $i = 0;
+   $i++ while $i < $n && substr($s1,$i,1) eq substr($s2,$i,1);
+   return substr($s1, 0, $i);
+}
+
+sub show_loot_table {
+   my ($OUT, $loot) = @_;
+print $OUT <<END;
+==Equipment==
+{| class="wikitable"
+! Slot
+! Icon
+! Description
+! <span style="background:#202020;border:#bad6e8;border-style:solid;border-width:0px;padding:inherit;color:#ffffff>Common</span>
+! <span style="background:#202020;border:#bad6e8;border-style:solid;border-width:0px;padding:inherit;color:#53e105>Uncommon</span>
+! <span style="background:#202020;border:#bad6e8;border-style:solid;border-width:0px;padding:inherit;color:#2a8cfa>Rare</span>
+! <span style="background:#202020;border:#bad6e8;border-style:solid;border-width:0px;padding:inherit;color:#a200ff>Epic</span>
+END
+
+   foreach my $num (sort keys %$loot) {
+      my $slot = $loot->{$num};
+      my $prefix = $slot->{_prefix};
+      my $suffix = $slot->{_suffix};
+      my $pref_len = $slot->{_pref_len};
+      my $suff_len = $slot->{_suff_len};
+      print $OUT "|-\n| align=center | $num\n",
+         "| align=center | $slot->{_icon}\n",
+         "| ", join('<br>', @$prefix), "\n";
+      foreach my $rarity (1 .. 4) {
+         if (my $effects = $slot->{$rarity}{effects}) {
+            my (@val, @shiny, @gold);
+            for my $i (0 .. $#$prefix) {
+               my $desc = $effects->[$i]{_desc} or next;
+               my $val = substr($desc, $pref_len->[$i], -$suff_len->[$i]);
+               push @val, $val . $suffix->[$i];
+               push @shiny, ($val * 1.5) . $suffix->[$i];
+               push @gold, ($val * 2) . $suffix->[$i] if $rarity == 4;
+            }
+            my $val = join(', ', @val);
+            $val .= '<br><span style="border:#bad6e8;border-style:solid;border-width:1px;padding:inherit;color:#bad6e8">Shiny ' . join(', ', @shiny) . '</span>';
+            $val .= '<br><span style="border:#fccc3b;border-style:solid;border-width:1px;padding:inherit;color:#fccc3b">Golden ' . join(', ', @gold) . '</span>' if @gold;
+            print $OUT "| align=center | $val\n";
+         }
+         else {
+            print $OUT "|\n";
+         }
+      }
+   }
+   print $OUT "|}\n\n";
+}
+
+sub show_loot_template {
+   my ($OUT, $loot) = @_;
+   print $OUT "==Equipment==\n{{EquipmentBox\n";
+
+   foreach my $slot (sort keys %$loot) {
+      my $info = $loot->{$slot};
+      my $pref_len = $info->{_pref_len}[0];
+      my $suff_len = $info->{_suff_len}[0];
+      print $OUT "|icon$slot=$info->{_icon}\n" if $info->{_icon};
+      print $OUT "|desc$slot=$info->{_prefix}[0]\n",
+         "|unit$slot=$info->{_suffix}[0]";
+      foreach my $rarity (1 .. 4) {
+         my $desc = $info->{$rarity}{effects}[0]{_desc} or next;
+         my $val = substr($desc, $pref_len, -$suff_len) or next;
+         print $OUT '|', lc($rarity{$rarity}), $slot, '=', $val;
+      }
+      print $OUT "\n";
+   }
+
+   print $OUT "}}\n\n";
+}
+
+sub show_feats {
+   my ($OUT, $hero, $feats) = @_;
+   my $size = '40px';
+
+print $OUT <<END;
+==Feats==
+{| class="wikitable"
+|-
+! Icon
+! Description
+! Source
+END
+
+   foreach my $feat (@$feats) {
+      my @desc;
+      foreach my $eff (@{$feat->{effects}}) {
+         parse_effect($eff);
+         my $desc = effect_string($hero, $eff);
+         push @desc, $desc if $desc;
+      }
+      $feat->{_desc} = join('<br>', @desc);
+
+      my $props = fixhash($feat, 'properties');
+      if (my $time = $props->{available_at_time}) {
+         $props->{_available} = localtime $time;
+      }
+
+      my $icon = get_graphic($feat->{graphic_id}) || '';
+      my @cost;
+      foreach my $src (@{$feat->{sources}}) {
+         my $type = $src->{source};
+         if ($type eq 'default') { }
+         elsif ($type eq 'promo') {
+            push @cost, 'Promotional' unless @cost;
+         }
+         elsif ($type eq 'chest') {
+            my $chest = $chest_types->{$src->{chest_type_id}} or die;
+            if (my $icon = get_graphic($chest->{graphic_id})) {
+               $icon = 'Icon_Gold_Chest.png' if $icon eq 'GoldChest.png';
+               push @cost, "[[File:$icon|$size|link=Chests]]";
+            }
+            else {
+               push @cost, $chest->{name};
+            }
+         }
+         elsif ($type eq 'gems') {
+            my $cost = commify($src->{cost});
+            push @cost, "{{Gems|size=$size|$cost}}";
+         }
+         elsif ($type eq 'patron') {
+            if (my $curr = $patron_currency{$src->{patron_id}}) {
+               my $coins = $src->{_cost}{patron_currency};
+               push @cost, "{{$curr|size=$size|$coins}}";
+            }
+            else {
+               push @cost, '???';
+            }
+         }
+         elsif ($type eq 'other') {
+            push @cost, $src->{tooltip} || '???';
+         }
+         else {
+            push @cost, '???';
+         }
+      }
+
+      my $color = lc $rarity{$feat->{rarity}};
+
+      print $OUT "|-\n",
+         ($icon ? "| {{Outline|color=$color|[[File:$icon|$size]]}}\n" : "|\n"),
+         "| '''$feat->{name}'''<br>$feat->{_desc}\n",
+         (@cost ? "| " . join('<br>', @cost) . "\n" : "|\n");
+   }
+
+   print $OUT "|}\n\n";
+}
+
+sub show_trailer {
+   my ($OUT, $hero) = @_;
+   print $OUT <<END;
+{{Navbox-Champions}}
+{{Navbox-IdleChampions}}
+[[Category:Champions]]
+END
+
+   my $char = $hero->{character_sheet_details};
+   my $align = $char->{alignment};
+   my $stat = $char->{ability_scores} or die;
+   $align =~ s/[a-z ]//g;
+   my $dmg = calc_total($hero->{_cols}{Damage}, '') || 0;
+   my $dmgAll = calc_total($hero->{_cols}{'Damage All'}, '') || '0%';
+   my $base = sci( $hero->{base_cost} );
+
+print $IDX <<END;
+|-
+| $hero->{seat_id}
+| $base
+| {{Icon-Link|$hero->{name}|size=35px|notext=yes}}
+| [[$hero->{name}]]
+| $dmg
+| $dmgAll
+| $char->{race}
+| $char->{class}
+| $align
+| $stat->{str}
+| $stat->{dex}
+| $stat->{con}
+| $stat->{int}
+| $stat->{wis}
+| $stat->{cha}
+END
+}
+
+sub get_feat_costs {
+   my ($feats, $items) = @_;
+   my %feat_costs;
+
+   foreach my $item (@$items) {
+      my $pid = $item->{patron_id} or next;
+      foreach my $eff (@{$item->{effects}}) {
+         my $fid = $eff->{feat_id} or next;
+         $feat_costs{$fid}{$pid} = $item->{cost};
+      }
+   }
+
+   foreach my $feat (@$feats) {
+      my $fid = $feat->{id} or next;
+      foreach my $src (@{$feat->{sources}}) {
+         my $pid = $src->{patron_id} or next;
+         my $cost = $feat_costs{$fid}{$pid} or next;
+         $src->{_cost} = dclone($cost);
+      }
+   }
+}
+
+sub get_graphic {
+   my ($id) = @_;
+   return unless $id;
+   my $gr = $graphics->{$id} or return;
+   my $im = $gr->{graphic} or return;
+   $im =~ s{^.*/}{};
+   return $im . '.png' if $im;
+   return;
+}
+
+sub parse_effect {
+   my ($effect_string) = @_;
+   return unless $effect_string;
+   my $eff;
+   if (ref $effect_string) {
+      $eff = $effect_string;
+      $effect_string = $eff->{effect_string};
+   }
+   elsif ($effect_string =~ /^\{/) {
+      $eff = $json->decode($effect_string);
+      $effect_string = $eff->{effect_string};
+   }
+   else {
+      $eff = { effect_string => $effect_string };
+   }
+   return $eff unless $effect_string;
+
+   my $params = $eff->{_params} ||= { };
+   my @effect = split /,/, $effect_string;
+   $eff->{_key} = my $key = shift @effect;
+   if (my $effkey = $effect_keys->{$key}) {
+      foreach my $param (@{$effkey->{_params}}) {
+         $params->{$param} = shift @effect;
+      }
+      if (my $ary = $effkey->{_ary}) {
+         $params->{$ary} = [ splice @effect ];
+      }
+      $eff->{_op} = $effkey->{_op} if $effkey->{_op};
+      my $desc = $effkey->{descriptions};
+      $eff->{description} ||= $desc->{desc} if ref($desc) eq 'HASH';
+   }
+   if (@effect) {
+      $params->{_rest} = [ @effect ];
+   }
+
+   if ($eff->{stacks_multiply}) {
+      $eff->{_op} = 'mulstack',
+   }
+   elsif ($eff->{max_stacks} || $eff->{stacks_on_trigger}) {
+      $eff->{_op} ||= 'addstack';
+   }
+
+   if ($key eq 'effect_def') {
+      if (my $ids = $params->{ids}) {
+         foreach my $id (@$ids) {
+            my $effdef = $effects->{$id} or die;
+            $effdef = dclone($effdef);
+            parse_effect($_) foreach @{$effdef->{effect_keys}};
+            push @{$eff->{_effects}}, $effdef;
+            my $props = fixhash($effdef, 'properties');
+            if ($id == 418) { # kludge for stoki's mark of ki
+               $props->{default_bonus_index} //= 1;
+            }
+         }
+      }
+   }
+   elsif ($key eq 'buff_upgrade') {
+      if (my $upg = $upgrades->{$params->{id}}) {
+         $params->{upgrade_name} = $upg->{name};
+      }
+   }
+
+   parse_effect($eff->{$_}) foreach
+      qw( effect_details heal_effect hit_effect monster_effect );
+
+   return $eff;
+}
+
+sub effect_expr {
+   my ($hero, $eff, $exp) = @_;
+   return unless $eff;
+   my $key = $exp->[0];
+   my $arg = $exp->[1];
+   if ($key eq 'ability_list') {
+      my $ids = get_param($eff,$arg) or return;
+      return list_names(map { $upgrades->{$_}{name} } @$ids);
+   }
+   elsif ($key eq 'as_multiplier') {
+      my $val = get_param($eff,$arg) or return;
+      return $val / 100 + 1;
+   }
+   elsif ($key eq 'attack_names_and') {
+      my $ids = get_param($eff,$arg) or return;
+      return list_names(map { $attacks->{$_}{name} } @$ids);
+   }
+   elsif ($key eq 'at_percent_damage') {
+      my $perc = get_param($eff,$arg) or return '';
+      return " at $perc percent";
+   }
+   elsif ($key eq 'buffed_crit_chance') {
+      return get_param($eff,$arg);
+   }
+   elsif ($key eq 'buffed_ki_points') {
+      return plural(get_param($eff,$arg), 'Ki Point');
+   }
+   elsif ($key eq 'describe_rarity') {
+      my $r = get_param($eff,$arg) or return;
+      return $rarity{$r};
+   }
+   elsif ($key eq 'describe_tag_list_and') {
+      my $tags = get_param($eff,$arg) or return;
+      return list_names(@$tags);
+   }
+   elsif ($key eq 'first_effect_key_target' || $key eq 'source'
+      || $key eq 'source_hero' || $key eq 'target')
+   {
+      return $hero->{name};
+   }
+   elsif ($key eq 'not_buffed') {
+      return get_param($eff,$arg);
+   }
+   elsif ($key eq 'pluralize_targets') {
+      my $amt = get_param($eff,'amount') or return;
+      return $amt == 1 ? 'target' : 'targets';
+   }
+   elsif ($key eq 'round') {
+      my $val = get_param($eff,$arg);
+      return int($val + 0.5) if defined $val;
+   }
+   elsif ($key eq 'seconds_plural' || $key eq 'time_str') {
+      return plural(get_param($eff,$arg), 'second');
+   }
+   elsif ($key eq 'stat_name') {
+      my $stat = get_param($eff,$arg) or return;
+      return $stat_names{$stat};
+   }
+   elsif ($key eq 'targets_desc_plural') {
+      my $val = get_param($eff,$arg) or return;
+      if ($val eq 'col') {
+         return "Champions in the same column as $hero->{name}";
+      }
+      return;
+   }
+   elsif ($key eq 'tmp_hp_cooldown') {
+      return get_param($eff,$arg);
+   }
+   elsif ($key eq 'upgrade_base_stack') {
+      return get_param($eff,'amount');
+   }
+   elsif ($key eq 'upgrade_bonus') {
+      return 0;
+   }
+   elsif ($key eq 'upgrade_hero') {
+      my $id = get_param($eff,$arg) or return;
+      $id = $id->[0] if ref $id;
+      my $upg = $upgrades->{$id} or return;
+      my $owner = $heroes->{$upg->{hero_id}} or return;
+      return $owner->{name};
+   }
+   elsif ($key eq 'upgrade_name') {
+      my $id = get_param($eff,$arg) or return;
+      my $upg = $upgrades->{$id} or return;
+      return $upg->{name};
+   }
+   elsif ($key eq 'value') {
+      return get_param($eff,$arg);
+   }
+   else {
+      return $fixed_subst{$key} // get_param($eff,$key);
+   }
+   return;
+}
+
+sub get_param {
+   my ($eff, $name) = @_;
+   return unless $name;
+   my $keys = $eff->{effect_keys};
+   return $eff->{_params}{$name} // $eff->{$name} unless $keys;
+   if ($eff->{properties}{indexed_effect_properties}) {
+      my $idx = $name =~ s/___(\d+)$// ? $1 - 1 : 0;
+      my $key = $keys->[$idx] or return;
+      return $key->{_params}{$name} // $key->{$name};
+   }
+   else {
+      foreach my $key (@$keys) {
+         my $val = $key->{_params}{$name} // $key->{$name};
+         return $val if defined $val;
+      }
+   }
+   return;
+}
+
+sub list_names {
+   my (@names, %names);
+   foreach my $name (@_) {
+      push @names, $name unless $names{$name};
+      $names{$name} = 1;
+   }
+   return unless @names;
+   return $names[0] if @names == 1;
+   my $last = pop @names;
+   return join(', ', @names) . ' and ' . $last;
+}
+
+sub plural {
+   my ($val, $sing, $plur) = @_;
+   return unless defined $val;
+   return "$val $sing" if $val == 1;
+   return $val . ' ' . ($plur || ($sing . 's'));
+}
+
+sub eval_expr {
+   my ($exp, $i) = @_;
+   my $term = $exp->[$i] or return;
+   if ($term eq 'not' || $term eq 'no') { return !eval_expr($exp, $i+1) }
+   elsif ($term eq 'incoming_desc') { return 1 }
+   elsif ($term eq 'jewel_thief_upgrade_unlocked') { return 0 }
+   elsif ($term eq 'short_form') { return 0 }
+   elsif ($term eq 'spurt_is_spirit') { return 1 }
+   elsif ($term eq 'static_desc') { return 1 }
+   elsif ($term eq 'upgrade_purchased') { return 0 }
+   return;
+}
+
+sub effect_string {
+   my ($hero, $eff, $desc) = @_;
+   $desc ||= $eff->{description} or return;
+   $desc =~ s/\r//g;
+   $desc =~ s/\^/\n/g;
+   $desc =~ s/^\w+'s Contibution: \$.*//ms;
+   my @desc = split /(\$(?:\w+|\(.*?\)))/, $desc;
+   $desc = '';
+   my $copy = 1;
+   my $copied = 0;
+
+   foreach my $part (@desc) {
+      if ($part =~ /^\$/) {
+         my $exp = substr($part, 1);
+         $exp = substr($exp, 1, -1) if $exp =~ /^\(/;
+         my @exp = split ' ', $exp;
+         $exp = $exp[0];
+         if ($exp eq 'if' || $exp eq 'elif') {
+            $copy = !$copied && eval_expr(\@exp, 1);
+            $copied = 1 if $copy;
+            next;
+         }
+         elsif ($exp eq 'or' || $exp eq 'else') {
+            $copy = !$copied;
+            $copied = 1;
+            next;
+         }
+         elsif ($exp eq 'fi') {
+            $copy = 1;
+            $copied = 0;
+            next;
+         }
+         elsif ($exp eq 'only_when_purchased') {
+            last;
+         }
+         elsif ($copy) {
+            my $newpart = effect_expr($hero, $eff, \@exp);
+            $part = $newpart if defined $newpart;
+         }
+      }
+      $desc .= $part if $copy;
+   }
+
+   $desc =~ s/\s+$//;
+   return $desc;
+}
+
+sub parse_effect_keys {
+   my ($defines) = @_;
+   my $effect_keys = build_index($defines, 'key');
+
+   foreach my $effkey (values %$effect_keys) {
+      my $param_list = $effkey->{_params} = [];
+      foreach my $param (split /,/, $effkey->{param_names} || 'amount') {
+         die if $effkey->{_ary};
+         my @param = split ' ', $param;
+         if (@param == 1) {
+            push @$param_list, $param[0];
+         }
+         elsif (@param == 2) {
+            if ($param[0] =~ /^\[(.*)\]$/) {
+               $effkey->{_ary} = $param[1];
+               $effkey->{_type}{$param[1]} = $1;
+            }
+            else {
+               push @$param_list, $param[1];
+               $effkey->{_type}{$param[1]} = $param[0];
+            }
+         }
+         else {
+            die;
+         }
+      }
+
+      my $props = fixhash($effkey, 'properties');
+      if (my $func = $props->{amount_func}) {
+         $effkey->{_op} = $amtfunc_ops{$func} if $amtfunc_ops{$func};
+      }
+
+      if (my $key = $effkey->{key}) {
+         $effkey->{_op} = $effkey_ops{$key} if $effkey_ops{$key};
+      }
+   }
+   $effect_keys->{effect_def} ||= { _ary => 'ids' };
+   return $effect_keys;
+}
+
+sub fixhash {
+   my ($eff, $key) = @_;
+   my $val = $eff->{$key};
+   my $ref = ref($val);
+   if ($ref eq 'HASH') {
+      return $val;
+   }
+   elsif ($ref eq 'ARRAY') {
+      return $eff->{$key} = @$val ? { _orig => $val } : { };
+   }
+   else {
+      return $eff->{$key} = $val ? { _orig => $val } : { };
+   }
+}
+
+sub build_index {
+   my ($table, $key) = @_;
+   die unless $table;
+   $key ||= 'id';
+   my $index = {};
+   foreach my $item (@$table) {
+      my $id = $item->{$key} or die;
+      die if exists $index->{$id};
+      $index->{$id} = $item;
+   }
+   return $index;
+}
+
+sub build_multi_index {
+   my ($table, $key) = @_;
+   die unless $table;
+   $key ||= 'id';
+   my $index = {};
+   foreach my $item (@$table) {
+      my $id = $item->{$key} or die;
+      push @{$index->{$id}}, $item;
+   }
+   return $index;
+}
+
+sub sci {
+   my ($x) = @_;
+   return sprintf('%.3g', $x) if abs($x) < 999.5;
+   $x = sprintf('%.2e', $x);
+   $x =~ s/e\+?0*/e/;
+   return $x
+}
+
+sub commify {
+   my ($x) = @_;
+   my ($num, $tail) = $x =~ /^(\d+)(.*)/ or return $x;
+   my @parts;
+   my $pos = length($num);
+   while ($pos > 3) {
+      $pos -= 3;
+      push @parts, substr($num, $pos, 3);
+   }
+   push @parts, substr($num, 0, $pos);
+   return join(',', reverse @parts) . $tail;
+}
+

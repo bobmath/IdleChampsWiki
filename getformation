@@ -1,0 +1,271 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use Cairo ();
+use JSON ();
+
+my $adv_id = $ARGV[0] or die "usage: $0 adventure_in\n";
+
+my $columns = 4;
+
+my $json = JSON->new();
+$json->boolean_values(0, 1);
+$json->indent(1);
+$json->canonical(1);
+
+my $pi = 3.141592653589793;
+
+my $adv = read_json("adventure_defines/$adv_id");
+my $camp = read_json("campaign_defines/$adv->{campaign_id}");
+
+my ($form, @escorts);
+foreach my $changes ($camp->{game_changes}, $adv->{game_changes}) {
+   next unless $changes;
+   foreach my $change (@$changes) {
+      my $type = $change->{type};
+      if ($type eq 'formation') {
+         $form = $change;
+      }
+      elsif ($type eq 'slot_escort') {
+         push @escorts, $change;
+      }
+      elsif ($type eq 'slot_escort_by_area') {
+         push @escorts, @{$change->{escorts}};
+      }
+      elsif ($type eq 'force_use_heroes') {
+         foreach my $slot (@{$change->{forced_slots}}) {
+            $slot->{_hero} = 1;
+            push @escorts, $slot;
+         }
+      }
+   }
+}
+
+print "Adventure: $adv->{name}\n";
+print "Campaign:  $camp->{name}\n";
+print "Formation: ", ($form->{name} || '???'), "\n";
+print "Escorts:   ", scalar(@escorts), "\n";
+
+formation_bounds();
+
+foreach my $escort  (@escorts) {
+   $escort->{min_area} ||= 1;
+   $escort->{slot_ids} ||= $escort->{slots} || [ $escort->{slot_id} ];
+}
+@escorts = sort { $a->{min_area} <=> $b->{min_area} } @escorts;
+unshift @escorts, { min_area => 1, slot_ids => [] }
+   if !@escorts || $escorts[0]{min_area} > 1;
+
+if (@escorts == 1) {
+   draw_simple();
+}
+elsif (progressive_escorts()) {
+   draw_progressive();
+}
+else {
+   draw_simple();
+   draw_multiple();
+}
+
+sub draw_simple {
+   my $scale = 0.8;
+   my $pad = 8;
+   my $xoff = $pad - $scale * $form->{xmin} + 0.5;
+   my $yoff = $pad - $scale * $form->{ymin} + 0.5;
+   my $wid = int($scale * ($form->{xmax} - $form->{xmin}) + 2*$pad + 0.5);
+   my $hgt = int($scale * ($form->{ymax} - $form->{ymin}) + 2*$pad + 0.5);
+   my $surface = Cairo::ImageSurface->create('argb32', $wid, $hgt);
+   my $ctx = Cairo::Context->create($surface);
+
+   my $slots = $form->{formation};
+   foreach my $slot (@$slots) {
+      $slot->{block} = $slot->{hero} = 0;
+   }
+
+   foreach my $escort (@escorts) {
+      my $what = $escort->{_hero} ? 'hero' : 'block';
+      foreach my $id (@{$escort->{slot_ids}}) {
+         $slots->[$id]{$what}++;
+      }
+   }
+
+   foreach my $slot (@$slots) {
+      my $x = int($slot->{x} * $scale + $xoff);
+      my $y = int($slot->{y} * $scale + $yoff);
+      if ($slot->{block} == @escorts) {
+         draw_x($ctx, $x, $y, $scale);
+      }
+      elsif ($slot->{hero} == @escorts) {
+         draw_box($ctx, $x, $y, $scale);
+      }
+      elsif ($slot->{block} == 0 && $slot->{hero} == 0) {
+         draw_o($ctx, $x, $y, $scale);
+      }
+      else {
+         $ctx->set_source_rgb(1, 0, 0);
+         $ctx->set_font_size(16);
+         center_text($ctx, $x, $y, '?');
+      }
+   }
+
+   $surface->flush();
+   $surface->write_to_png('form.png');
+}
+
+sub draw_progressive {
+   my $digits = length($escorts[-1]{min_area});
+   my $scale = $digits < 3 ? 0.8 : 3 / $digits;
+   my $xpad = $digits < 3 ? 8 : 2+3*$digits;
+   my $ypad = 8;
+   my $xoff = $xpad - $scale * $form->{xmin} + 0.5;
+   my $yoff = $ypad - $scale * $form->{ymin} + 0.5;
+   my $wid = int($scale * ($form->{xmax} - $form->{xmin}) + 2*$xpad + 0.5);
+   my $hgt = int($scale * ($form->{ymax} - $form->{ymin}) + 2*$ypad + 0.5);
+   my $surface = Cairo::ImageSurface->create('argb32', $wid, $hgt);
+   my $ctx = Cairo::Context->create($surface);
+
+   my $slots = $form->{formation};
+   foreach my $escort (@escorts) {
+      foreach my $id (@{$escort->{slot_ids}}) {
+         $slots->[$id]{wave} ||= $escort->{min_area};
+      }
+   }
+
+   foreach my $slot (@$slots) {
+      my $x = int($slot->{x} * $scale + $xoff);
+      my $y = int($slot->{y} * $scale + $yoff);
+      if ($slot->{wave}) {
+         $ctx->set_source_rgb(1, 0, 0);
+         $ctx->set_font_size(12);
+         center_text($ctx, $x, $y, $slot->{wave});
+      }
+      else {
+         draw_o($ctx, $x, $y, $scale);
+      }
+   }
+
+   $surface->flush();
+   $surface->write_to_png('form.png');
+}
+
+sub draw_multiple {
+   my $cols = $columns;
+   $cols = @escorts if @escorts < $cols;
+   my $rows = int((@escorts - 1) / $cols) + 1;
+   my $pad = 16;
+   my $scale = 0.8;
+   my $xoff = $pad - $scale * $form->{xmin} + 0.5;
+   my $yoff = $pad - $scale * $form->{ymin} + 12.5;
+   my $wid = int($scale * ($form->{xmax} - $form->{xmin}) + 2*$pad + 0.5);
+   my $hgt = int($scale * ($form->{ymax} - $form->{ymin}) + 2*$pad + 0.5) + 12;
+   my $surface = Cairo::ImageSurface->create('argb32', $wid*$cols, $hgt*$rows);
+   my $ctx = Cairo::Context->create($surface);
+   my $slots = $form->{formation};
+
+   foreach my $i (0 .. $#escorts) {
+      my $escort = $escorts[$i];
+      my $x0 = $xoff + $wid * ($i % $cols);
+      my $y0 = $yoff + $hgt * int($i / $cols);
+      $ctx->set_source_rgb(1, 1, 1);
+      $ctx->set_font_size(14);
+      center_text($ctx, $x0 + $wid/2 - $xoff,
+         $y0 + 10 - $yoff, "Wave $escort->{min_area}");
+      foreach my $slot (@$slots) {
+         $slot->{block} = 0;
+      }
+      foreach my $id (@{$escort->{slot_ids}}) {
+         $slots->[$id]{block}++;
+      }
+      foreach my $slot (@$slots) {
+         my $x = int($slot->{x} * $scale + $x0);
+         my $y = int($slot->{y} * $scale + $y0);
+         if ($slot->{block}) {
+            draw_x($ctx, $x, $y, $scale);
+         }
+         else {
+            draw_o($ctx, $x, $y, $scale);
+         }
+      }
+   }
+
+   $surface->flush();
+   $surface->write_to_png('form_big.png');
+}
+
+sub draw_x {
+   my ($ctx, $x, $y, $size) = @_;
+   my $d = 5.5 * ($size || 0.8);
+   $ctx->set_source_rgb(1, 0, 0);
+   $ctx->move_to($x - $d, $y - $d);
+   $ctx->line_to($x + $d, $y + $d);
+   $ctx->move_to($x - $d, $y + $d);
+   $ctx->line_to($x + $d, $y - $d);
+   $ctx->stroke();
+}
+
+sub draw_o {
+   my ($ctx, $x, $y, $size) = @_;
+   my $d = 6 * ($size || 0.8);
+   $ctx->set_source_rgb(1, 1, 1);
+   $ctx->arc($x, $y, $d, 0, 2*$pi);
+   $ctx->stroke();
+}
+
+sub draw_box {
+   my ($ctx, $x, $y, $size) = @_;
+   my $d = 5.5 * ($size || 0.8);
+   $ctx->set_source_rgb(0, 0.8, 0);
+   $ctx->rectangle($x - $d, $y - $d, 2*$d, 2*$d);
+   $ctx->stroke();
+}
+
+sub center_text {
+   my ($ctx, $x, $y, $text) = @_;
+   my $extents = $ctx->text_extents($text);
+   $ctx->move_to($x - $extents->{width} / 2 - $extents->{x_bearing},
+      $y - $extents->{height} / 2 - $extents->{y_bearing});
+   $ctx->show_text($text);
+   $ctx->stroke();
+}
+
+sub progressive_escorts {
+   my $prev_slots = [];
+   foreach my $escort (@escorts) {
+      my $slots = $escort->{slot_ids};
+      my %slots;
+      $slots{$_} = 1 foreach @$slots;
+      foreach my $id (@$prev_slots) {
+         return 0 unless $slots{$id};
+      }
+      $prev_slots = $slots;
+   }
+   return 1;
+}
+
+sub formation_bounds {
+   my $slot0 = $form->{formation}[0];
+   my $xmin = my $xmax = $slot0->{x};
+   my $ymin = my $ymax = $slot0->{y};
+   foreach my $slot (@{$form->{formation}}) {
+      my $x = $slot->{x};
+      my $y = $slot->{y};
+      $xmin = $x if $x < $xmin;
+      $xmax = $x if $x > $xmax;
+      $ymin = $y if $y < $ymin;
+      $ymax = $y if $y > $ymax;
+   }
+   $form->{xmin} = $xmin;
+   $form->{xmax} = $xmax;
+   $form->{ymin} = $ymin;
+   $form->{ymax} = $ymax;
+}
+
+sub read_json {
+   my ($file) = @_;
+   open my $IN, '<', "defines/$file" or die;
+   local $/ = undef;
+   my $data = $json->decode(<$IN>);
+   close $IN;
+   return $data;
+}
+

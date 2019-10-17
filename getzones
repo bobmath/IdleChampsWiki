@@ -1,0 +1,361 @@
+#!/usr/bin/env perl
+use utf8;
+use strict;
+use warnings;
+use JSON ();
+
+my $json = JSON->new();
+#$json->boolean_values(0, 1);
+$json->indent(1);
+$json->canonical(1);
+
+my (%hero_names, %hero_skins, %chest_types);
+load_heroes();
+
+my %patron_names = (
+   1 => 'Mirt',
+   2 => 'Vajra',
+);
+
+my %patron_coins = (
+   1 => 'RubyCoins',
+   2 => 'SymbolOfVajra',
+);
+
+my %navtabs = (
+   1  => 'swordcoast',
+   2  => 'annihilation',
+   15 => 'waterdeep',
+   22 => 'baldursgate',
+);
+
+my %formations = (
+   1  => 'Formation Diamond Plain.png',
+   2  => 'Formation Wedge Plain.png',
+   15 => 'Formation Tanky Donut Plain.png',
+   22 => 'Formation A-Furnace.png',
+);
+
+my %favored_enemies = (
+   beast         => 'Minsc, Zorbu',
+   drow          => 'Zorbu',
+   fey           => 'Minsc',
+   humanoid      => 'Minsc, Zorbu',
+   monstrosity   => 'Minsc',
+   undead        => 'Minsc, Nerys, Zorbu',
+   'armor-based' => 'Wulfgar',
+);
+
+my $monsters = load_defines('monster_defines');
+my $campaigns = load_defines('campaign_defines');
+my $favors = load_defines('reset_currency_defines');
+
+{
+   my $sets = {};
+   my $areas = load_defines('adventure_area_defines');
+   foreach my $area (values %$areas) {
+      $sets->{$area->{area_set_id}}{areas}{$area->{area_id}} = $area;
+   }
+
+   my $advents = load_defines('adventure_defines');
+   foreach my $adv_id (sort { $a <=> $b } keys %$advents) {
+      my $advent = $advents->{$adv_id};
+      next if $advent->{name} =~ /^Free Play/;
+      my $set_id = $advent->{area_set_id};
+      push @{$sets->{$set_id}{advents}}, $advent;
+   }
+
+   mkdir 'zones';
+   mkdir 'rawzones';
+   my %seen;
+
+   foreach my $set_id (sort { $a <=> $b } keys %$sets) {
+      my $set = $sets->{$set_id};
+      my $variants = $set->{advents};
+      my $adv = $variants->[0] or next;
+      my $camp = $campaigns->{$adv->{campaign_id}};
+      my $filename = $adv->{name};
+      $filename =~ s{[\s/\\]+}{_}g;
+      $filename =~ s/^\./_./;
+      $filename .= '-' . $set_id if $seen{$filename};
+      $seen{$filename} = 1;
+      #print $filename, "\n";
+      open my $OUT, '>:utf8', "rawzones/$filename" or die;
+      print $OUT $json->encode($set);
+      close $OUT;
+      open $OUT, '>:utf8', "zones/$filename" or die;
+
+      print $OUT "'''$adv->{name}''' is one of the [[adventures]] ",
+         "in the campaign [[$camp->{name}]].\n\n";
+      show_advent($OUT, $adv);
+
+      if (@$variants > 1) {
+         print $OUT qq[\n==Variants==\n<ul class="hlist">\n];
+         foreach my $i (1 .. $#$variants) {
+            print $OUT "<li>\n";
+            show_advent($OUT, $variants->[$i]);
+            print $OUT "</li>\n";
+         }
+         print $OUT "</ul>\n\n";
+      }
+
+      show_waves($OUT, $set->{areas});
+
+      my $navtab = $navtabs{$adv->{campaign_id}};
+      $navtab = $navtab ? "|show=$navtab" : '';
+      print $OUT "{{Navbox-Adventures$navtab}}\n",
+         "{{Navbox-IdleChampions}}\n",
+         "[[Category:Adventures]]\n";
+      close $OUT;
+   }
+}
+
+sub show_waves {
+   my ($OUT, $areas) = @_;
+   return unless $areas;
+   my $tbl = '';
+   my (%trash_totals, %boss_totals);
+   foreach my $num (sort { $a <=> $b } keys %$areas) {
+      my $area = $areas->{$num};
+      my %monsters;
+      if (my $monsters = $area->{monsters}) {
+         foreach my $id (@$monsters) {
+            add_monster({ monster_id=>$id }, \%monsters);
+         }
+      }
+      if (my $waves = $area->{waves}) {
+         foreach my $i (0 .. $#$waves - 1) {
+            foreach my $id (@{$waves->[$i]}) {
+               add_monster({ monster_id=>$id }, \%monsters);
+            }
+         }
+         if (@$waves) {
+            foreach my $id (@{$waves->[-1]}) {
+               add_monster({ boss=>1, monster_id=>$id }, \%monsters);
+            }
+         }
+      }
+      if (my $props = $area->{properties}) {
+         if (my $static = $props->{static_monsters}) {
+            foreach my $key (sort keys %$static) {
+               add_monster($static->{$key}, \%monsters);
+            }
+         }
+      }
+
+      if (my $names = $monsters{'trash-names'}) {
+         my $tags = $monsters{'trash-tags'} ||= {};
+         $tbl .= "|-\n| $num\n| " . join(', ', sort keys %$names)
+            . "\n| " . join(' ', sort keys %$tags) . "\n";
+         $trash_totals{$_}++ foreach keys %$tags;
+      }
+
+      if (my $names = $monsters{'boss-names'}) {
+         my $tags = $monsters{'boss-tags'} ||= {};
+         my @names = sort keys %$names;
+         foreach my $name (@names) {
+            my $count = $names->{$name};
+            $name .= " ×$count" if $count > 1;
+         }
+         $tbl .= qq[|- style="background-color:#333"\n| Boss\n| ]
+            . join(', ', @names) . "\n| "
+            . join(' ', sort keys %$tags) . "\n";
+         $boss_totals{$_}++ foreach keys %$tags;
+      }
+   }
+
+   $trash_totals{$_} += 0 foreach keys %boss_totals;
+   return unless %trash_totals;
+   print $OUT qq[==Waves==\n{| class="wikitable"\n],
+      "|-\n! Type !! Waves !! Bosses !! Favored By\n";
+   foreach my $tag (sort keys %trash_totals) {
+      next if $tag eq 'boss' || $tag eq 'static';
+      my $boss_count = $boss_totals{$tag} || 0;
+      my $favored = $favored_enemies{$tag} || '';
+      $favored = ' ' . $favored if $favored;
+      print $OUT "|- align=center\n",
+         "| $tag || $trash_totals{$tag} || $boss_count ||$favored\n";
+   }
+   print $OUT "|}\n\n";
+
+   print $OUT qq[{| class="wikitable mw-collapsible mw-collapsed"\n|-\n],
+      "! Area !! Monsters !! Tags\n$tbl|}\n\n";
+}
+
+sub add_monster {
+   my ($info, $monst_info) = @_;
+   my $monst = $monsters->{$info->{monster_id}} or die;
+   my $type = $info->{boss} ? 'boss' : 'trash';
+   $type = 'boss' if grep $_ eq 'boss', @{$monst->{tags}};
+   $monst_info->{"$type-names"}{$monst->{name}}++;
+   my $tags = $monst_info->{"$type-tags"} ||= {};
+   $tags->{$_}++ foreach @{$monst->{tags}};
+   if (my $props = $monst->{properties}) {
+      $tags->{'armor-based'}++ if $props->{armor_based_damage};
+      $tags->{'hit-based'}++ if $props->{hits_based_damage};
+   }
+}
+
+sub show_advent {
+   my ($OUT, $adv) = @_;
+   my $camp = $campaigns->{$adv->{campaign_id}};
+   my $favor = $favors->{$camp->{reset_currency_id}};
+   print $OUT "{{AdventureBox\n",
+      "|name=$adv->{name}\n",
+      "|icon=Adventure $adv->{name}.png\n",
+      "|description=$adv->{description}\n";
+
+   my $n;
+   foreach my $req (split /\s*\n/, $adv->{requirements_text}) {
+      print $OUT "|requirement", ++$n, "=$req\n";
+   }
+
+   print $OUT "|objectives=$adv->{objectives_text}\n";
+
+   my $restr = $adv->{restrictions_text};
+   $restr =~ s/\s*\n/<br>/g;
+   print $OUT "|restrictions=$restr\n" unless lc($restr) eq 'no restrictions';
+
+   my @rewards = get_rewards($adv->{rewards}, $adv->{name});
+   if ($favor) {
+      (my $name = $favor->{name}) =~ s/'.*//;
+      push @rewards, "{{DivineFavor|$name|size=32px|×???}}";
+   }
+   print $OUT "|rewards=@rewards\n" if @rewards;
+
+   my $form = get_formation($adv) || "Formation $adv->{name}.png";
+   print $OUT "|formation=$form\n";
+
+   my $patrons = $adv->{patron_objectives};
+   $patrons = {} unless ref($patrons) eq 'HASH';
+   $n = 0;
+   foreach my $patid (sort keys %$patrons) {
+      my $patvar = $patrons->{$patid};
+      my $name = $patron_names{$patid} || 'Unknown';
+
+      foreach my $varid (sort keys %$patvar) {
+         my @obj;
+         foreach my $obj (@{$patvar->{$varid}}) {
+            my $cond = $obj->{condition};
+            if ($cond eq 'complete_area') {
+               push @obj, "Complete Area $obj->{area}";
+            }
+            elsif ($cond eq 'objective_time_limit') {
+               my $mins = $obj->{time} / 60;
+               push @obj, "Within $mins Minutes";
+            }
+            else {
+               warn "$adv->{name} $cond";
+            }
+         }
+         my @rewards = get_rewards($adv->{patron_rewards}{$patid}{$varid},
+            $adv->{name});
+
+         $n++;
+         print $OUT "|patronname$n=$name\n";
+         print $OUT "|patronobjectives$n=@obj\n" if @obj;
+         print $OUT "|patronrewards$n=@rewards\n" if @rewards;
+      }
+   }
+
+   print $OUT "}}\n";
+}
+
+sub get_formation {
+   my ($adv) = @_;
+   if (my $changes = $adv->{game_changes}) {
+      foreach my $change (@$changes) {
+         my $type = $change->{type};
+         return if $type eq 'formation'
+            || $type eq 'slot_escort'
+            || $type eq 'slot_escort_by_area'
+            || $type eq 'force_use_heroes';
+      }
+   }
+   return $formations{$adv->{campaign_id}};
+}
+
+sub get_rewards {
+   my ($rewards, $where) = @_;
+   my @rewards;
+   foreach my $reward (@$rewards) {
+      my $type = $reward->{reward};
+      if ($type eq 'red_rubies') {
+         push @rewards, "{{Gems|size=32px|×$reward->{amount}}}";
+      }
+      elsif ($type eq 'patron_currency') {
+         my $what = $patron_coins{$reward->{patron_id}} || 'UnknownCoin';
+         push @rewards, "{{$what|×$reward->{amount}}}";
+      }
+      elsif ($type eq 'patron_influence') {
+         my $who = $patron_names{$reward->{patron_id}} || 'Unknown';
+         my $amt = sci($reward->{amount});
+         push @rewards, "{{${who}Influence|×$amt}}";
+      }
+      elsif ($type eq 'claim_crusader') {
+         my $who = $hero_names{$reward->{crusader_id}} || 'Unknown';
+         push @rewards, "{{Icon-Link|$who}}";
+      }
+      elsif ($type eq 'chest') {
+         my $chest = $chest_types{$reward->{chest_type_id}} || 'Unknown Chest';
+         push @rewards, $chest;
+      }
+      elsif ($type eq 'champion_skin') {
+         my $skin = $hero_skins{$reward->{skin_id}} || 'Unknown';
+         push @rewards, "[[File:Icon $skin.png|24px]] $skin";
+      }
+      else {
+         warn "Unknown reward in $where: $type";
+      }
+   }
+   return @rewards;
+}
+
+sub load_defines {
+   my ($name) = @_;
+   opendir my $DIR, "defines/$name" or die;
+   my $data = {};
+   local $/ = undef;
+   foreach my $file (readdir $DIR) {
+      next if $file =~ /\D/;
+      open my $IN, '<', "defines/$name/$file" or die;
+      $data->{$file} = $json->decode(<$IN>);
+      close $IN;
+   }
+   closedir $DIR;
+   return $data;
+}
+
+sub load_heroes {
+   open my $IN, '<', 'define.json' or die;
+   local $/ = undef;
+   my $data = $json->decode(<$IN>);
+   close $IN;
+
+   if (my $defines = $data->{hero_defines}) {
+      foreach my $hero (@$defines) {
+         $hero_names{$hero->{id}} = $hero->{name};
+      }
+   }
+
+   if (my $defines = $data->{hero_skin_defines}) {
+      foreach my $skin (@$defines) {
+         $hero_skins{$skin->{id}} = $skin->{name};
+      }
+   }
+
+   if (my $defines = $data->{chest_type_defines}) {
+      foreach my $chest (@$defines) {
+         $chest_types{$chest->{id}} = $chest->{name};
+      }
+   }
+}
+
+sub sci {
+   my ($x) = @_;
+   return sprintf('%.3g', $x) if abs($x) < 999.5;
+   $x = sprintf('%.2e', $x);
+   $x =~ s/e\+?0*/e/;
+   return $x
+}
+
