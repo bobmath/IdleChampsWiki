@@ -37,13 +37,14 @@ my %formations = (
 );
 
 my %favored_enemies = (
+   'armor-based' => 'Wulfgar',
    beast         => 'Minsc, Zorbu',
    drow          => 'Zorbu',
    fey           => 'Minsc',
+   fiend         => 'Turiel',
    humanoid      => 'Minsc, Zorbu',
    monstrosity   => 'Minsc',
    undead        => 'Minsc, Nerys, Zorbu',
-   'armor-based' => 'Wulfgar',
 );
 
 my $monsters = load_defines('monster_defines');
@@ -166,7 +167,7 @@ sub show_waves {
 
    $trash_totals{$_} += 0 foreach keys %boss_totals;
    return unless %trash_totals;
-   print $OUT qq[==Waves==\n{| class="wikitable"\n],
+   print $OUT qq[==Waves==\n{| class="wikitable sortable"\n],
       "|-\n! Type !! Waves !! Bosses !! Favored By\n";
    foreach my $tag (sort keys %trash_totals) {
       next if $tag eq 'boss' || $tag eq 'static';
@@ -179,7 +180,7 @@ sub show_waves {
    print $OUT "|}\n\n";
 
    print $OUT qq[{| class="wikitable mw-collapsible mw-collapsed"\n|-\n],
-      "! Area !! Monsters !! Tags\n$tbl|}\n\n";
+      "! Wave !! Monsters !! Tags\n$tbl|}\n\n";
 }
 
 sub add_monster {
