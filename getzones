@@ -194,6 +194,17 @@ sub add_monster {
    if (my $props = $monst->{properties}) {
       $tags->{'armor-based'}++ if $props->{armor_based_damage};
       $tags->{'hit-based'}++ if $props->{hits_based_damage};
+      if (my $spawn = $props->{spawns_monster_on_death}) {
+         if (my $ids = $spawn->{monster_ids}) {
+            foreach my $id (@$ids) {
+               add_monster({ monster_id=>$id, boss=>$info->{boss} },
+                  $monst_info);
+            }
+         }
+         if (my $id = $spawn->{monster_id}) {
+            add_monster({ monster_id=>$id, boss=>$info->{boss} }, $monst_info);
+         }
+      }
    }
 }
 
