@@ -149,10 +149,8 @@ sub draw_progressive {
 }
 
 sub draw_multiple {
-   my $cols = $columns;
-   $cols = @escorts if @escorts < $cols;
-   my $rows = int((@escorts - 1) / $cols) + 1;
-   while ($rows * ($cols - 1) >= @escorts) { $cols-- }
+   my $rows = int((@escorts - 1) / $columns) + 1;
+   my $cols = int((@escorts - 1) / $rows) + 1;
    my $pad = 16;
    my $scale = 0.8;
    my $xoff = $pad - $scale * $form->{xmin} + 0.5;
