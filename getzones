@@ -331,7 +331,7 @@ sub load_defines {
    local $/ = undef;
    foreach my $file (readdir $DIR) {
       next if $file =~ /\D/;
-      open my $IN, '<', "defines/$name/$file" or die;
+      open my $IN, '<:utf8', "defines/$name/$file" or die;
       $data->{$file} = $json->decode(<$IN>);
       close $IN;
    }
@@ -340,7 +340,7 @@ sub load_defines {
 }
 
 sub load_heroes {
-   open my $IN, '<', 'define.json' or die;
+   open my $IN, '<:utf8', 'define.json' or die;
    local $/ = undef;
    my $data = $json->decode(<$IN>);
    close $IN;
