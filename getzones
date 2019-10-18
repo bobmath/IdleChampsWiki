@@ -37,14 +37,15 @@ my %formations = (
 );
 
 my %favored_enemies = (
-   'armor-based' => 'Wulfgar',
-   beast         => 'Minsc, Zorbu',
-   drow          => 'Zorbu',
-   fey           => 'Minsc',
-   fiend         => 'Turiel',
-   humanoid      => 'Minsc, Zorbu',
-   monstrosity   => 'Minsc',
-   undead        => 'Minsc, Nerys, Zorbu',
+   'armor-based' => 'Binwin, Wulfgar',
+   'beast'       => 'Minsc, Zorbu',
+   'drow'        => 'Zorbu',
+   'fey'         => 'Minsc',
+   'fiend'       => 'Turiel',
+   'hit-based'   => 'Binwin',
+   'humanoid'    => 'Minsc, Zorbu',
+   'monstrosity' => 'Minsc',
+   'undead'      => 'Minsc, Nerys, Zorbu',
 );
 
 my $monsters = load_defines('monster_defines');
