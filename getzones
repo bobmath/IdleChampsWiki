@@ -212,7 +212,7 @@ sub show_advent {
    print $OUT "{{AdventureBox\n",
       "|name=-\n",
       "|icon=Adventure $adv->{name}.png\n",
-      "|iconsize=40px\n",
+      "|iconsize=48px\n",
       "|description=$adv->{description}\n";
 
    my $n;
