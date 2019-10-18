@@ -126,14 +126,10 @@ sub show_waves {
          }
       }
       if (my $waves = $area->{waves}) {
-         foreach my $i (0 .. $#$waves - 1) {
+         foreach my $i (0 .. $#$waves) {
+            my $boss = $i >= $#$waves;
             foreach my $id (@{$waves->[$i]}) {
-               add_monster({ monster_id=>$id }, \%monsters);
-            }
-         }
-         if (@$waves) {
-            foreach my $id (@{$waves->[-1]}) {
-               add_monster({ boss=>1, monster_id=>$id }, \%monsters);
+               add_monster({ monster_id=>$id, boss=>$boss }, \%monsters);
             }
          }
       }
