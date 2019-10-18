@@ -92,13 +92,13 @@ my $favors = load_defines('reset_currency_defines');
       show_advent($OUT, $adv);
 
       if (@$variants > 1) {
-         print $OUT qq[\n==Variants==\n<ul class="hlist">\n];
+         print $OUT "\n==Variants==\n";
          foreach my $i (1 .. $#$variants) {
-            print $OUT "<li>\n";
-            show_advent($OUT, $variants->[$i]);
-            print $OUT "</li>\n";
+            my $var = $variants->[$i];
+            print $OUT "===$var->{name}===\n";
+            show_advent($OUT, $var);
+            print $OUT "\n";
          }
-         print $OUT "</ul>\n\n";
       }
 
       show_waves($OUT, $set->{areas});
@@ -214,8 +214,9 @@ sub show_advent {
    my $camp = $campaigns->{$adv->{campaign_id}};
    my $favor = $favors->{$camp->{reset_currency_id}};
    print $OUT "{{AdventureBox\n",
-      "|name=$adv->{name}\n",
+      "|name=-\n",
       "|icon=Adventure $adv->{name}.png\n",
+      "|iconsize=40px\n",
       "|description=$adv->{description}\n";
 
    my $n;
