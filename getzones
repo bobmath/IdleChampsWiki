@@ -69,18 +69,14 @@ my $favors = load_defines('reset_currency_defines');
 
    mkdir 'zones';
    mkdir 'rawzones';
-   my %seen;
 
    foreach my $set_id (sort { $a <=> $b } keys %$sets) {
       my $set = $sets->{$set_id};
       my $variants = $set->{advents};
       my $adv = $variants->[0] or next;
       my $camp = $campaigns->{$adv->{campaign_id}};
-      my $filename = $adv->{name};
-      $filename =~ s{[\s/\\]+}{_}g;
-      $filename =~ s/^\./_./;
-      $filename .= '-' . $set_id if $seen{$filename};
-      $seen{$filename} = 1;
+      push @{$camp->{_locations}{$adv->{location_id}}}, $variants;
+      my $filename = make_filename($adv->{name}, $set_id);
       #print $filename, "\n";
       open my $OUT, '>:utf8', "rawzones/$filename" or die;
       print $OUT $json->encode($set);
@@ -108,6 +104,25 @@ my $favors = load_defines('reset_currency_defines');
       print $OUT "{{Navbox-Adventures$navtab}}\n",
          "{{Navbox-IdleChampions}}\n",
          "[[Category:Adventures]]\n";
+      close $OUT;
+   }
+
+   my $locations = load_defines('location_defines');
+   for my $camp_id (sort { $a <=> $b } keys %$campaigns) {
+      my $camp = $campaigns->{$camp_id} or next;
+      my $locs = $camp->{_locations} or next;
+      my $filename = make_filename($camp->{name}, $camp_id);
+      open my $OUT, '>:utf8', "zones/$filename" or die;
+      foreach my $loc_id (sort { $a <=> $b } keys %$locs) {
+         my $loc = $locations->{$loc_id} or next;
+         print $OUT "*$loc->{name}\n";
+         foreach my $zone (@{$locs->{$loc_id}}) {
+            my @names = map "[[$_->{name}]]", @$zone;
+            my $line = shift @names;
+            $line .= ' – ' . join(', ', @names) if @names;
+            print $OUT "**$line\n";
+         }
+      }
       close $OUT;
    }
 }
@@ -362,6 +377,21 @@ sub load_heroes {
          $chest_types{$chest->{id}} = $chest->{name};
       }
    }
+}
+
+my %seen_files;
+sub make_filename {
+   my ($file, $id) = @_;
+   $file =~ s{[\s:/\\]+}{_}g;
+   $file =~ s/^\./_./;
+   $file .= '-' . ($id||'') if $seen_files{$file};
+   if ($seen_files{$file}) {
+      $file .= ++$seen_files{$file};
+   }
+   else {
+      $seen_files{$file} = 'a';
+   }
+   return $file;
 }
 
 sub sci {
