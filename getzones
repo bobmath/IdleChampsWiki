@@ -221,6 +221,8 @@ sub show_advent {
 
    my $n;
    foreach my $req (split /\s*\n/, $adv->{requirements_text}) {
+      $req =~ s/^(Must have completed ")(.*?)(")$/$1\[[$2]]$3/g
+         unless $adv->{variant_adventure_id};
       print $OUT "|requirement", ++$n, "=$req\n";
    }
 
