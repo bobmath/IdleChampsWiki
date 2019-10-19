@@ -157,7 +157,7 @@ sub show_waves {
 
       if (my $names = $monsters{'trash-names'}) {
          my $tags = $monsters{'trash-tags'} ||= {};
-         $tbl .= "|-\n| $num\n| " . join(', ', sort keys %$names)
+         $tbl .= "|-\n| $num\n| " . join(', ', map "[[$_]]", sort keys %$names)
             . "\n| " . join(' ', sort keys %$tags) . "\n";
          $trash_totals{$_}++ foreach keys %$tags;
       }
@@ -167,6 +167,7 @@ sub show_waves {
          my @names = sort keys %$names;
          foreach my $name (@names) {
             my $count = $names->{$name};
+            $name = "[[$name]]";
             $name .= " ×$count" if $count > 1;
          }
          $tbl .= qq[|- style="background-color:#333"\n| Boss\n| ]
