@@ -9,7 +9,7 @@ my $json = JSON->new();
 $json->indent(1);
 $json->canonical(1);
 
-my (%hero_names, %hero_skins, %chest_types);
+my (%hero_names, %hero_skins, %chest_types, %graphics);
 load_heroes();
 
 my %patron_names = (
@@ -129,8 +129,8 @@ my $favors = load_defines('reset_currency_defines');
 sub show_waves {
    my ($OUT, $areas) = @_;
    return unless $areas;
-   my $tbl = '';
-   my (%trash_totals, %boss_totals);
+   my $top = 0;
+   my (@tbl, %trash_totals, %boss_totals);
    foreach my $num (sort { $a <=> $b } keys %$areas) {
       my $area = $areas->{$num};
       my %monsters;
@@ -157,8 +157,9 @@ sub show_waves {
 
       if (my $names = $monsters{'trash-names'}) {
          my $tags = $monsters{'trash-tags'} ||= {};
-         $tbl .= "|-\n| $num\n| " . join(', ', map "[[$_]]", sort keys %$names)
-            . "\n| " . join(' ', sort keys %$tags) . "\n";
+         push @tbl, [ $num,
+            join(', ', map "[[$_]]", sort keys %$names),
+            join(' ', sort keys %$tags) ];
          $trash_totals{$_}++ foreach keys %$tags;
       }
 
@@ -170,9 +171,14 @@ sub show_waves {
             $name = "[[$name]]";
             $name .= " ×$count" if $count > 1;
          }
-         $tbl .= qq[|- style="background-color:#333"\n| Boss\n| ]
-            . join(', ', @names) . "\n| "
-            . join(' ', sort keys %$tags) . "\n";
+         push @tbl, [ 'Boss', join(', ', @names),
+            join(' ', sort keys %$tags) ];
+         if (my $pics = $monsters{'boss-pics'}) {
+            my $span = @tbl - $top;
+            $tbl[$top][3] = "rowspan=$span align=center valign=bottom | "
+               . join(', ', map "[[File:$_.png|150x150px]]", sort keys %$pics);
+            $top = @tbl;
+         }
          $boss_totals{$_}++ foreach keys %$tags;
       }
    }
@@ -192,7 +198,13 @@ sub show_waves {
    print $OUT "|}\n\n";
 
    print $OUT qq[{| class="wikitable mw-collapsible mw-collapsed"\n|-\n],
-      "! Wave !! Monsters !! Tags\n$tbl|}\n\n";
+      "! Wave !! Monsters !! Tags !! Image\n";
+   foreach my $row (@tbl) {
+      print $OUT $row->[0] eq 'Boss'
+         ? qq[|- style="background-color:#333"\n] : "|-\n";
+      print $OUT "| $_\n" foreach @$row;
+   }
+   print $OUT "|}\n\n";
 }
 
 sub add_monster {
@@ -201,6 +213,7 @@ sub add_monster {
    my $type = $info->{boss} ? 'boss' : 'trash';
    $type = 'boss' if grep $_ eq 'boss', @{$monst->{tags}};
    $monst_info->{"$type-names"}{$monst->{name}}++;
+   $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
    $tags->{$_}++ foreach @{$monst->{tags}};
    if (my $props = $monst->{properties}) {
@@ -362,6 +375,14 @@ sub load_heroes {
    build_name_index($data->{hero_defines}, \%hero_names);
    build_name_index($data->{hero_skin_defines}, \%hero_skins);
    build_name_index($data->{chest_type_defines}, \%chest_types);
+
+   if (my $defines = $data->{graphic_defines}) {
+      foreach my $graphic (@$defines) {
+         my $name = $graphic->{graphic} or next;
+         $name =~ s{^.*/}{};
+         $graphics{$graphic->{id}} = $name;
+      }
+   }
 }
 
 sub build_name_index {
