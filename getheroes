@@ -117,6 +117,7 @@ my %effkey_ops = (
    increase_damage_from_attacks => 'mul',
    increase_monster_damage_from => 'mul',
    increase_monster_with_tags_damage => 'mul',
+   korth_fighting_spirit => 'heal',
    mirror_image_damage_increase => 'mulstack',
    monster_with_tag_more_damage => 'mul',
    owner_killing_blow_gold_bonus => 'mul',
