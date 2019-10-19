@@ -176,7 +176,7 @@ sub show_waves {
          if (my $pics = $monsters{'boss-pics'}) {
             my $span = @tbl - $top;
             $tbl[$top][3] = "rowspan=$span align=center valign=bottom | "
-               . join(', ', map "[[File:$_.png|150x150px]]", sort keys %$pics);
+               . join(' ', map "[[File:$_.png|150x150px]]", sort keys %$pics);
             $top = @tbl;
          }
          $boss_totals{$_}++ foreach keys %$tags;
