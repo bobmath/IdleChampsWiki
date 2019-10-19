@@ -1,0 +1,192 @@
+#!/usr/bin/env perl
+# Draw one or more frames from an animation and save as .png.
+# Animation files may contain one or more characters.
+# Each character can have a number of sequences (stand, walk, attack, etc).
+# Each sequence consists of a number of frames.
+use strict;
+use warnings;
+use Cairo ();
+use Getopt::Long qw( GetOptions );
+use JSON ();
+use POSIX qw( ceil );
+
+my $json = JSON->new();
+$json->boolean_values(0, 1);
+$json->indent(1);
+$json->canonical(1);
+
+{
+   my $char = 0;
+   my $seq = 0;
+   my $frame = 0;
+   my $outfile = 'frame';
+   my ($infile, $flip, $list, $help);
+   GetOptions('in|i=s' => \$infile,
+      'char|c=s' => \$char,
+      'seq|s=i' => \$seq,
+      'frame|f=s' => \$frame,
+      'flip|p' => \$flip,
+      'list|l' => \$list,
+      'out|o=s' => \$outfile,
+      'help|h|?' => \$help);
+die <<END if $help;
+Options:
+   --in=input file
+   --char=character number or name
+   --seq=sequence number
+   --frame=frame number
+      all     every frame
+      all/2   every second frame
+      0-9     range of frames
+      1,2,10  specific frames 
+   --flip  flip horizontally
+   --list  list characters in file
+   --out=output file prefix
+END
+   $infile ||= $ARGV[0] or die 'input file required';
+
+   my $graphics = load_graphics($infile);
+   die "not an animation file" unless $graphics->{format} eq 'skeletal';
+
+   if ($list) {
+      my $n = 0;
+      foreach my $character (@{$graphics->{characters}}) {
+         print "Character #$n: $character->{name}\n";
+         $n++;
+         my $m = 0;
+         foreach my $sequence (@{$character->{sequences}}) {
+            my $nframes = @{$sequence->[0]{sequence}};
+            print "   Sequence #$m: $nframes frame",
+               ($nframes == 1 ? '' : 's'), "\n";
+            $m++;
+         }
+      }
+      exit 0;
+   }
+
+   my $character = ($char =~ /\D/ ? $graphics->{_byname}{$char}
+      : $graphics->{characters}[$char]) or die "Invalid character: $char\n";
+   my $sequence = $character->{sequences}[$seq]
+      or die "Invalid animation sequence: $seq\n";
+   my $nframes = @{$sequence->[0]{sequence}};
+
+   my @frames;
+   my $step = $frame =~ s{/(\d+)$}{} ? $1 : 1;
+   foreach my $grp (split /,/, $frame) {
+      if ($grp eq 'all') {
+         for (my $i = 0; $i < $nframes; $i += $step) { push @frames, $i }
+      }
+      elsif ($grp =~ /^(\d+)-(\d+)$/) {
+         for (my $i = $1; $i <= $2; $i += $step) { push @frames, $i }
+      }
+      else {
+         push @frames, $grp;
+      }
+   }
+   my $digits = 1;
+   foreach my $num (@frames) {
+      die "Invalid frame: $num\n" if $num =~ /\D/;
+      die "Frame number too high: $num (only $nframes frames)\n"
+         if $num >= $nframes;
+      $digits = length($num) if length($num) > $digits;
+   }
+
+   my $surf = Cairo::ImageSurface->create('argb32', 10, 10);
+   my $ctx = Cairo::Context->create($surf);
+   $ctx->scale(-1, 1) if $flip;
+   my @bound = anim_bounds($ctx, $sequence, @frames) or die 'nothing to draw';
+   my $x = ceil(-$bound[0]);
+   my $y = ceil(-$bound[1]);
+   my $w = ceil($bound[2]) + $x;
+   my $h = ceil($bound[3]) + $y;
+
+   foreach my $num (@frames) {
+      $surf = Cairo::ImageSurface->create('argb32', $w, $h);
+      $ctx = Cairo::Context->create($surf);
+      $ctx->translate($x, $y);
+      $ctx->scale(-1, 1) if $flip;
+      draw_frame($ctx, $graphics, $sequence, $num);
+      $surf->flush();
+      my $out = sprintf "%s%0*d.png", $outfile, $digits, $num;
+      print "Writing $out\n";
+      $surf->write_to_png($out) or die;
+   }
+}
+
+sub draw_frame {
+   my ($ctx, $graphics, $sequence, $frame) = @_;
+   my $matrix = $ctx->get_matrix();
+   my @draw;
+   for my $i (0 .. $#$sequence) {
+      my $part = $sequence->[$i];
+      my $pos = $part->{sequence}[$frame] or die;
+      push @draw, [ $part, $pos, $pos->{z}, $i ] if $pos->{used};
+   }
+   @draw = sort { $a->[2] <=> $b->[2] || $a->[3] <=> $b->[3] } @draw;
+   for my $draw (@draw) {
+      my ($part, $pos) = @$draw;
+      my $src = $graphics->{_images}[ $part->{texture_index} ] or die;
+      my $rect = Cairo::Surface->create_for_rectangle($src,
+         $part->{x}, $part->{y}, $part->{w}, $part->{h});
+      $ctx->translate($pos->{tx}, $pos->{ty});
+      $ctx->scale($pos->{sx}, $pos->{sy});
+      $ctx->rotate($pos->{rot});
+      $ctx->set_source_surface($rect, -$part->{cx}, -$part->{cy});
+      $ctx->paint();
+      $ctx->set_matrix($matrix);
+   }
+}
+
+sub anim_bounds {
+   my ($ctx, $sequence, @frames) = @_;
+   my $matrix = $ctx->get_matrix();
+   @frames = 0 .. $#{$sequence->[0]{sequence}} unless @frames;
+   my $xmin = 1e6; my $xmax = -1e6;
+   my $ymin = 1e6; my $ymax = -1e6;
+   foreach my $part (@$sequence) {
+      my @pts = ([-$part->{cx}, -$part->{cy}],
+          [$part->{w} - $part->{cx}, -$part->{cy}],
+          [-$part->{cx}, $part->{h} - $part->{cy}],
+          [$part->{w} - $part->{cx}, $part->{h} - $part->{cy}]);
+      foreach my $frame (@frames) {
+         my $pos = $part->{sequence}[$frame] or die;
+         next unless $pos->{used};
+         $ctx->translate($pos->{tx}, $pos->{ty});
+         $ctx->scale($pos->{sx}, $pos->{sy});
+         $ctx->rotate($pos->{rot});
+         foreach my $pt (@pts) {
+            my ($x, $y) = $ctx->user_to_device(@$pt);
+            $xmin = $x if $x < $xmin; $xmax = $x if $x > $xmax;
+            $ymin = $y if $y < $ymin; $ymax = $y if $y > $ymax;
+         }
+         $ctx->set_matrix($matrix);
+      }
+   }
+   return if $xmin > $xmax;
+   return ($xmin, $ymin, $xmax, $ymax);
+}
+
+sub load_graphics {
+   my ($file) = @_;
+   my $dir = $file =~ m{^(.*/)} ? $1 : '';
+   open my $IN, '<', $file or die "Can't read $file: $!";
+   local $/ = undef;
+   my $data = $json->decode(<$IN>);
+   close $IN;
+   if (my $files = $data->{files}) {
+      foreach my $pngfile (@$files) {
+         my $image = Cairo::ImageSurface->create_from_png($dir . $pngfile);
+         die "Can't read $pngfile" unless $image->status() eq 'success';
+         push @{$data->{_images}}, $image;
+      }
+   }
+   foreach my $field (qw( graphics characters )) {
+      my $list = $data->{$field} or next;
+      foreach my $item (@$list) {
+         my $name = $item->{name} or next;
+         $data->{_byname}{$name} = $item;
+      }
+   }
+   return $data;
+}
+
