@@ -88,12 +88,11 @@ my $favors = load_defines('reset_currency_defines');
       show_advent($OUT, $adv);
 
       if (@$variants > 1) {
-         print $OUT "\n==Variants==\n";
+         print $OUT "==Variants==\n";
          foreach my $i (1 .. $#$variants) {
             my $var = $variants->[$i];
             print $OUT "===$var->{name}===\n";
             show_advent($OUT, $var);
-            print $OUT "\n";
          }
       }
 
@@ -286,7 +285,7 @@ sub show_advent {
       }
    }
 
-   print $OUT "}}\n";
+   print $OUT "}}\n\n";
 }
 
 sub get_formation {
