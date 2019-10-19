@@ -35,10 +35,10 @@ Options:
    --char=character number or name
    --seq=sequence number
    --frame=frame number
-      all     every frame
-      all/2   every second frame
-      0-9     range of frames
-      1,2,10  specific frames 
+      all    every frame
+      all/2  every second frame
+      0-9    range of frames
+      1,2,5  specific frames 
    --flip  flip horizontally
    --list  list characters in file
    --out=output file prefix
