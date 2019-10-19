@@ -113,9 +113,12 @@ my %effkey_ops = (
    heal_most_damaged => 'heal',
    hero_dps_mult_by_upgrade_val => 'mulstack',
    hero_dps_multiplier_from_temp_hp => 'mul',
+   hero_dps_multiplier_reduced_by_age => 'mul',
    increase_attack_cooldown_distributed => 'time',
    increase_damage_from_attacks => 'mul',
+   increase_monster_damage_additive_pools => 'addstack',
    increase_monster_damage_from => 'mul',
+   increase_monster_damage_if_affected_by => 'mul',
    increase_monster_with_tags_damage => 'mul',
    korth_fighting_spirit => 'heal',
    mirror_image_damage_increase => 'mulstack',
@@ -389,7 +392,9 @@ sub do_effect {
       my $att = $attacks->{$id} or die;
       do_bonus($hero, $upg, "$att->{name} Targets", 'add', $params->{amount});
    }
-   elsif ($key eq 'add_monster_hit_effects') {
+   elsif ($key eq 'add_monster_hit_effects'
+      || $key eq 'monster_effect_on_attacked')
+   {
       do_monster_effect($hero, $upg, $params, $eff->{monster_effect});
    }
    elsif ($key eq 'buff_upgrade') {
@@ -432,7 +437,7 @@ sub do_effect {
          do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, '%') if $amt;
       }
       else {
-         do_bonus($hero, $upg, 'Damage', 'mul', $amt);
+         do_bonus($hero, $upg, 'Damage', 'mul', $amt) if $amt;
       }
    }
    elsif ($key eq 'mirror_image') {
@@ -498,8 +503,12 @@ sub do_monster_effect {
    my ($hero, $upg, $params, $eff) = @_;
    my $key = $eff->{_key} or return;
    if (my $op = $eff->{_op}) {
+      my $amt = $params->{amount};
       if ($op eq 'mulstack') {
-         do_bonus($hero, $upg, $upg->{name}, 'basepow', $params->{amount});
+         do_bonus($hero, $upg, $upg->{name}, 'basepow', $amt);
+      }
+      elsif ($op eq 'addstack') {
+         do_bonus($hero, $upg, $upg->{name}, 'base', $amt, '%×n', $amt . '%');
       }
    }
    elsif ($key eq 'effect_def') {
