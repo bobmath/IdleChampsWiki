@@ -358,23 +358,16 @@ sub load_heroes {
    local $/ = undef;
    my $data = $json->decode(<$IN>);
    close $IN;
+   build_name_index($data->{hero_defines}, \%hero_names);
+   build_name_index($data->{hero_skin_defines}, \%hero_skins);
+   build_name_index($data->{chest_type_defines}, \%chest_types);
+}
 
-   if (my $defines = $data->{hero_defines}) {
-      foreach my $hero (@$defines) {
-         $hero_names{$hero->{id}} = $hero->{name};
-      }
-   }
-
-   if (my $defines = $data->{hero_skin_defines}) {
-      foreach my $skin (@$defines) {
-         $hero_skins{$skin->{id}} = $skin->{name};
-      }
-   }
-
-   if (my $defines = $data->{chest_type_defines}) {
-      foreach my $chest (@$defines) {
-         $chest_types{$chest->{id}} = $chest->{name};
-      }
+sub build_name_index {
+   my ($defines, $index) = @_;
+   return unless $defines;
+   foreach my $rec (@$defines) {
+      $index->{$rec->{id}} = $rec->{name};
    }
 }
 
