@@ -211,11 +211,14 @@ sub add_monster {
    my ($info, $monst_info) = @_;
    my $monst = $monsters->{$info->{monster_id}} or die;
    my $type = $info->{boss} ? 'boss' : 'trash';
-   $type = 'boss' if grep $_ eq 'boss', @{$monst->{tags}};
+   my %tags;
+   $tags{$_} = 1 foreach @{$monst->{tags}};
+   return if $tags{non_monster};
+   $type = 'boss' if $tags{boss};
    $monst_info->{"$type-names"}{$monst->{name}}++;
    $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
-   $tags->{$_}++ foreach @{$monst->{tags}};
+   $tags->{$_}++ foreach keys %tags;
    if (my $props = $monst->{properties}) {
       $tags->{'armor-based'}++ if $props->{armor_based_damage};
       $tags->{'hit-based'}++ if $props->{hits_based_damage};
