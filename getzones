@@ -241,9 +241,7 @@ sub show_advent {
    my $camp = $campaigns->{$adv->{campaign_id}};
    my $favor = $favors->{$camp->{reset_currency_id}};
    print $OUT "{{AdventureBox\n",
-      "|name=-\n",
       "|icon=Adventure $adv->{name}.png\n",
-      "|iconsize=48px\n",
       "|description=$adv->{description}\n";
 
    my $n;
