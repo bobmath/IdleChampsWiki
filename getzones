@@ -77,7 +77,7 @@ my $favors = load_defines('reset_currency_defines');
       my $camp = $campaigns->{$adv->{campaign_id}};
       push @{$camp->{_locations}{$adv->{location_id}}}, $variants;
       my $filename = make_filename($adv->{name}, $set_id);
-      #print $filename, "\n";
+      print $filename, "\n";
       open my $OUT, '>:utf8', "rawzones/$filename" or die;
       print $OUT $json->encode($set);
       close $OUT;
@@ -98,9 +98,8 @@ my $favors = load_defines('reset_currency_defines');
 
       show_waves($OUT, $set->{areas});
 
-      my $navtab = $navtabs{$adv->{campaign_id}};
-      $navtab = $navtab ? "|show=$navtab" : '';
-      print $OUT "{{Navbox-Adventures$navtab}}\n",
+      my $navtab = $navtabs{$adv->{campaign_id}} || 'events';
+      print $OUT "{{Navbox-Adventures|show=$navtab}}\n",
          "{{Navbox-IdleChampions}}\n",
          "[[Category:Adventures]]\n";
       close $OUT;
