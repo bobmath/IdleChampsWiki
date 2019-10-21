@@ -110,6 +110,7 @@ my %effkey_ops = (
    gold_multiplier_mult => 'mul',
    grant_temporary_hp_with_cooldown => 'heal',
    heal => 'heal',
+   heal_by_distance_from_source => 'heal',
    heal_most_damaged => 'heal',
    hero_dps_mult_by_upgrade_val => 'mulstack',
    hero_dps_multiplier_from_temp_hp => 'mul',
@@ -131,6 +132,7 @@ my %effkey_ops = (
    shandie_arrows => 'addstack',
    single_target_damage_buff => 'mul',
    spikey_bonus_attacks => 'mul',
+   storm_aura_storm_soul => 'mul',
    time_scale_when_not_attacked => 'mul',
    unflinching_hatred => 'mul',
    walnut_jobs_done => 'mul',
@@ -339,7 +341,7 @@ sub do_upgrade {
 
    if ($spec) {
       my $old = $hero->{_abils}{$spec};
-      $hero->{_abils}{$spec} = "'''{{Spec|$spec}}'''\n\n";
+      $hero->{_abils}{$spec} = "'''{{Spec|size=32px|$spec}}'''\n\n";
       my $desc = $upg->{specialization_description};
       my $eff = $upg->{_effect};
       my $more = $eff->{_desc} ||= effect_string($hero, $eff);
