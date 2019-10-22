@@ -51,6 +51,7 @@ my %favored_enemies = (
 my $monsters = load_defines('monster_defines');
 my $campaigns = load_defines('campaign_defines');
 my $favors = load_defines('reset_currency_defines');
+my $backgrounds = load_defines('background_defines');
 
 {
    my $sets = {};
@@ -154,9 +155,17 @@ sub show_waves {
          }
       }
 
+      my $zonetags = '';
+      my $bkg = $backgrounds->{$area->{background_id}};
+      if (ref(my $props = $bkg->{properties}) eq 'HASH') {
+         if (my $tags = $props->{area_tags}) {
+            $zonetags = join ' ', sort @$tags;
+         }
+      }
+
       if (my $names = $monsters{'trash-names'}) {
          my $tags = $monsters{'trash-tags'} ||= {};
-         push @tbl, [ $num,
+         push @tbl, [ $num, $zonetags,
             join(', ', map "[[$_]]", sort keys %$names),
             join(' ', sort keys %$tags) ];
          $trash_totals{$_}++ foreach keys %$tags;
@@ -170,11 +179,11 @@ sub show_waves {
             $name = "[[$name]]";
             $name .= " ×$count" if $count > 1;
          }
-         push @tbl, [ 'Boss', join(', ', @names),
+         push @tbl, [ 'Boss', $zonetags, join(', ', @names),
             join(' ', sort keys %$tags) ];
          if (my $pics = $monsters{'boss-pics'}) {
             my $span = @tbl - $top;
-            $tbl[$top][3] = "rowspan=$span align=center valign=bottom | "
+            $tbl[$top][4] = "rowspan=$span align=center valign=bottom | "
                . join(' ', map "[[File:$_.png|150x150px]]", sort keys %$pics);
             $top = @tbl;
          }
@@ -197,7 +206,7 @@ sub show_waves {
    print $OUT "|}\n\n";
 
    print $OUT qq[{| class="wikitable mw-collapsible mw-collapsed"\n|-\n],
-      "! Wave !! Monsters !! Tags !! Image\n";
+      "! Wave !! Tags !! Monsters !! Monster Tags !! Image\n";
    foreach my $row (@tbl) {
       print $OUT $row->[0] eq 'Boss'
          ? qq[|- style="background-color:#333"\n] : "|-\n";
