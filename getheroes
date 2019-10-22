@@ -270,7 +270,7 @@ sub do_hero {
       }
    }
 
-   show_abilities($OUT, $hero);
+   print $OUT "==Abilities==\n", $hero->{_abils} if $hero->{_abils};
    show_bond($OUT, $hero);
    show_milestones($OUT, $hero);
 
@@ -320,9 +320,14 @@ sub do_upgrade {
    $upg->{_effect}{_col} = $upg->{name} if $upg->{name};
 
    my $spec = $upg->{specialization_name};
+   my $specpos;
    if ($spec) {
       $spec =~ s/\?//g;
       my $mile = $hero->{_milestones}[-1];
+      $hero->{_abils} .= "'''<u>Specialization Choice – Level $level</u>'''\n\n"
+         unless $mile->{_specs};
+      $hero->{_abils} .= "'''{{Spec|size=32px|$spec}}'''\n\n";
+      $specpos = length($hero->{_abils});
       push @{$hero->{_specs}}, [] unless $mile->{_specs};
       push @{$hero->{_specs}[-1]}, $spec;
       push @{$mile->{_specs}}, $spec;
@@ -339,9 +344,7 @@ sub do_upgrade {
 
    do_effect($hero, $upg, $upg->{_effect});
 
-   if ($spec) {
-      my $old = $hero->{_abils}{$spec};
-      $hero->{_abils}{$spec} = "'''{{Spec|size=32px|$spec}}'''\n\n";
+   if ($specpos) {
       my $desc = $upg->{specialization_description};
       my $eff = $upg->{_effect};
       my $more = $eff->{_desc} ||= effect_string($hero, $eff);
@@ -352,8 +355,7 @@ sub do_upgrade {
          }
          $desc .= $more;
       }
-      $hero->{_abils}{$spec} .= $desc . "\n\n" if $desc;
-      $hero->{_abils}{$spec} .= $old if $old;
+      substr($hero->{_abils}, $specpos, 0, "$desc\n\n") if $desc;
    }
 
    if (my $unlock = $upg->{_unlock}) {
@@ -601,10 +603,12 @@ sub do_unlock {
    }
 
    $longdesc ||= $desc;
-   my $ind = $req ? ':' : '';
-   my $abils = $hero->{_abils} ||= {};
-   $abils->{$req} .= "$ind'''$name - $type'''\n\n";
-   $abils->{$req} .= "$ind$longdesc\n\n" if $longdesc;
+   my $longname = $req ? "{{Spec|$req|$name}}" : $name;
+   if (my $lvl = $upg->{required_level}) {
+      $type = "Level $lvl $type";
+   }
+   $hero->{_abils} .= "'''$longname – $type'''\n\n";
+   $hero->{_abils} .= "$longdesc\n\n" if $longdesc;
 
    unless ($nomile) {
       $desc ||= $longdesc || '';
@@ -807,21 +811,6 @@ print $OUT <<END;
 {{Quote|$char->{backstory}}}
 
 END
-}
-
-sub show_abilities {
-   my ($OUT, $hero) = @_;
-   my $abil = $hero->{_abils} or return;
-   print $OUT "==Abilities==\n", ($abil->{''} || '');
-   my $specsets = $hero->{_specs};
-   my $num;
-   foreach my $specs (@$specsets) {
-      my $choice = @$specsets < 2 ? '' : ' ' . ++$num;
-      print $OUT "'''<u>Specialization Choice$choice</u>'''\n\n";
-      foreach my $spec (@$specs) {
-         print $OUT $abil->{$spec} || '';
-      }
-   }
 }
 
 sub show_bond {
