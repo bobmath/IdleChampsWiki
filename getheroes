@@ -394,12 +394,15 @@ sub do_effect {
    elsif ($key eq 'add_attack_targets') {
       my $id = $params->{optional_attack_id} || $hero->{base_attack_id};
       my $att = $attacks->{$id} or die;
-      do_bonus($hero, $upg, "$att->{name} Targets", 'add', $params->{amount});
+      do_bonus($hero, $upg, "$att->{name} Targets", 'add', $amt);
    }
    elsif ($key eq 'add_monster_hit_effects'
       || $key eq 'monster_effect_on_attacked')
    {
       do_monster_effect($hero, $upg, $params, $eff->{monster_effect});
+   }
+   elsif ($key eq 'buff_aila_ult_bonus_dmg') {
+      do_bonus($hero, $upg, 'Storm Herald Bonus', 'mul', $amt);
    }
    elsif ($key eq 'buff_upgrade') {
       do_buff_upgrade($hero, $upg, $params->{id}, $amt,
@@ -498,8 +501,14 @@ sub do_ultimate {
       if $upg->{_bud};
    $upg->{_unlock} = '';
    foreach my $anim (@{$att->{animations}}) {
-      my $id = $anim->{attack_id} or next;
-      do_base_attack($hero, $upg, $id);
+      if (my $id = $anim->{attack_id}) {
+         do_base_attack($hero, $upg, $id);
+      }
+      if (my $bonus = $anim->{bonus_damage_from}) {
+         # Aila Storm Herald
+         do_bonus($hero, $upg, "$att->{name} Bonus", 'base',
+            $bonus->{amount} * 100, '%');
+      }
    }
 }
 
