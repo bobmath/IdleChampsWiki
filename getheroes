@@ -506,8 +506,9 @@ sub do_ultimate {
       }
       if (my $bonus = $anim->{bonus_damage_from}) {
          # Aila Storm Herald
-         do_bonus($hero, $upg, "$att->{name} Bonus", 'base',
-            $bonus->{amount} * 100, '%×n');
+         my $amt = $bonus->{amount} * 100;
+         do_bonus($hero, $upg, "$att->{name} Bonus", 'base', $amt, '%×n',
+            "$amt%");
       }
    }
 }
