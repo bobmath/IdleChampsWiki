@@ -109,6 +109,7 @@ sub draw_simple {
    }
 
    $surface->flush();
+   print "Writing form.png\n";
    $surface->write_to_png('form.png');
 }
 
@@ -145,6 +146,7 @@ sub draw_progressive {
    }
 
    $surface->flush();
+   print "Writing form.png\n";
    $surface->write_to_png('form.png');
 }
 
@@ -188,6 +190,7 @@ sub draw_multiple {
    }
 
    $surface->flush();
+   print "Writing form_big.png\n";
    $surface->write_to_png('form_big.png');
 }
 
