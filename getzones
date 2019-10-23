@@ -320,6 +320,8 @@ sub get_formation {
             || $type eq 'slot_escort'
             || $type eq 'slot_escort_by_area'
             || $type eq 'force_use_heroes';
+         return if $type eq 'only_allow_crusaders'
+            && $change->{by_tags}{target_slots};
       }
    }
    return $formations{$adv->{campaign_id}};
