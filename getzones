@@ -346,7 +346,7 @@ sub get_rewards {
       }
       elsif ($type eq 'claim_crusader') {
          my $who = $hero_names{$reward->{crusader_id}} || 'Unknown';
-         push @rewards, "{{Icon-Link|$who}}";
+         push @rewards, "{{Icon-Link|size=32px|$who}}";
       }
       elsif ($type eq 'chest') {
          my $chest = $chest_types{$reward->{chest_type_id}} || 'Unknown Chest';
@@ -354,7 +354,7 @@ sub get_rewards {
       }
       elsif ($type eq 'champion_skin') {
          my $skin = $hero_skins{$reward->{skin_id}} || 'Unknown';
-         push @rewards, "[[File:Icon $skin.png|24px]] $skin";
+         push @rewards, "[[File:Icon $skin.png|32px]] $skin";
       }
       else {
          warn "Unknown reward in $where: $type";
