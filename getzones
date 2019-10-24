@@ -205,7 +205,7 @@ sub show_waves {
    }
    print $OUT "|}\n\n";
 
-   print $OUT qq[{| class="wikitable mw-collapsible mw-collapsed"\n|-\n],
+   print $OUT qq[{| class="wikitable"\n|-\n],
       "! Wave !! Tags !! Monsters !! Monster Tags !! Image\n";
    foreach my $row (@tbl) {
       print $OUT $row->[0] eq 'Boss'
