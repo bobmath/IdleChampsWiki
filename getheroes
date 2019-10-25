@@ -1100,8 +1100,13 @@ sub show_feats {
    my ($OUT, $hero, $feats) = @_;
    my $size = '40px';
 
+   print $OUT "==Feats==\n";
+   if (my $unlock = $hero->{default_feat_slot_unlocks}) {
+      print $OUT "Unlocked at level", (@$unlock > 1 ? "s" : ""),
+         " ", list_names(@$unlock), "\n";
+   }
+
 print $OUT <<END;
-==Feats==
 {| class="wikitable"
 |-
 ! Icon
