@@ -1,0 +1,136 @@
+#!/usr/bin/env perl
+use utf8;
+use strict;
+use warnings;
+use JSON ();
+use Storable qw( dclone );
+
+my $json = JSON->new();
+#$json->boolean_values(0, 1);
+$json->indent(1);
+$json->canonical(1);
+open my $IN, '<', 'define.json' or die;
+local $/ = undef;
+my $defines = $json->decode(<$IN>);
+close $IN;
+
+my %patron_name = (
+   1 => 'Mirt',
+   2 => 'Vajra',
+);
+
+my %patron_coin = (
+   1 => 'RubyCoins',
+   2 => 'SymbolOfVajra',
+);
+
+my $patron_items = build_multi_index($defines->{patron_shop_item_defines},
+   'patron_id');
+
+mkdir 'patrons';
+
+foreach my $patron (@{$defines->{patron_defines}}) {
+   my $filename = $patron->{name};
+   $filename =~ s/\s+/_/g;
+   $filename =~ s/^\./_/;
+   print "$filename\n";
+   open my $OUT, '>:utf8', "patrons/$filename" or die;
+   print $OUT "==Background==\n{{Quote|$patron->{description}}}\n\n";
+   show_items($OUT, $patron);
+   close $OUT;
+}
+
+sub show_items {
+   my ($OUT, $patron) = @_;
+   my $items = $patron_items->{$patron->{id}} or return;
+   my $coin = $patron_coin{$patron->{id}} || 'UnknownCoin';
+   print $OUT "==Shop==\n",
+      qq[{| class="wikitable"\n],
+      "! Item !! Description !! Limit !! Requirement !! Cost\n";
+   foreach my $item (@$items) {
+      my @limit;
+      if (ref(my $props = $item->{properties}) eq 'HASH') {
+         foreach my $prop (sort keys %$props) {
+            my $val = $props->{$prop};
+            if ($prop eq 'max_per_week') {
+               push @limit, "{{NoWrap|$val per week}}";
+            }
+            elsif ($prop eq 'max_purchases') {
+               my $s = $val == 1 ? '' : 's';
+               push @limit, "{{NoWrap|$val purchase$s}}";
+            }
+            else {
+               push @limit, '???';
+            }
+         }
+      }
+
+      my @req;
+      foreach my $req (@{$item->{requirements}}) {
+         my $cond = $req->{condition};
+         if ($cond eq 'patron_total_influence') {
+            my $name = $patron_name{$req->{patron_id}} || 'Unknown';
+            my $val = sci($req->{influence});
+            push @req, "{{${name}Influence|$val}}";
+         }
+         else {
+            push @req, '???';
+         }
+      }
+
+      my @cost;
+      if (my $cost = $item->{cost}) {
+         if (my $val = $cost->{patron_currency}) {
+            $val = commify($val);
+            push @cost, "{{$coin|×$val}}";
+         }
+         elsif ($cost->{open_premium_shop}) {
+            push @cost, 'Premium';
+         }
+         else {
+            push @cost, '???';
+         }
+      }
+
+      print $OUT "|-\n| $item->{name}\n",
+         "| $item->{description}\n",
+         join(" ", "|", @limit), "\n",
+         join(" ", "|", @req), "\n",
+         join(" ", "|", @cost), "\n";
+   }
+   print $OUT "|}\n\n";
+}
+
+sub build_multi_index {
+   my ($table, $key) = @_;
+   die unless $table;
+   $key ||= 'id';
+   my $index = {};
+   foreach my $item (@$table) {
+      my $id = $item->{$key} or die;
+      push @{$index->{$id}}, $item;
+   }
+   return $index;
+}
+
+sub sci {
+   my ($x) = @_;
+   return sprintf('%.3g', $x) if abs($x) < 999.5;
+   $x = sprintf('%.2e', $x);
+   $x =~ s/e\+?0*/e/;
+   return $x
+}
+
+sub commify {
+   my ($x) = @_;
+   my ($num, $tail) = $x =~ /^(\d+)(.*)/ or return $x;
+   my @parts;
+   my $pos = length($num);
+   while ($pos > 3) {
+      $pos -= 3;
+      push @parts, substr($num, $pos, 3);
+   }
+   push @parts, substr($num, 0, $pos);
+   return join(',', reverse @parts) . $tail;
+}
+
