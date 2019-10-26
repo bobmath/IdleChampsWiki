@@ -124,6 +124,8 @@ my $backgrounds = load_defines('background_defines');
       }
       close $OUT;
    }
+
+   system 'diff', '-ur', 'oldzones', 'zones' if -d 'oldzones';
 }
 
 sub show_waves {
@@ -246,10 +248,11 @@ sub add_monster {
 
 sub show_advent {
    my ($OUT, $adv) = @_;
+   (my $picname = $adv->{name}) =~ s/\?/-/g;
    my $camp = $campaigns->{$adv->{campaign_id}};
    my $favor = $favors->{$camp->{reset_currency_id}};
    print $OUT "{{AdventureBox\n",
-      "|icon=Icon $adv->{name}.png\n",
+      "|icon=Icon $picname.png\n",
       "|description=$adv->{description}\n";
 
    my $n;
@@ -273,7 +276,7 @@ sub show_advent {
    }
    print $OUT "|rewards=@rewards\n" if @rewards;
 
-   my $form = get_formation($adv) || "Formation $adv->{name}.png";
+   my $form = get_formation($adv) || "Formation $picname.png";
    print $OUT "|formation=$form\n";
 
    my $patrons = $adv->{patron_objectives};
