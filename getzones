@@ -169,7 +169,7 @@ sub show_waves {
          my $tags = $monsters{'trash-tags'} ||= {};
          push @tbl, [ $num, $zonetags,
             join(', ', map "[[$_]]", sort keys %$names),
-            join(' ', sort keys %$tags) ];
+            show_tags($tags) ];
          $trash_totals{$_}++ foreach keys %$tags;
       }
 
@@ -182,7 +182,7 @@ sub show_waves {
             $name .= " ×$count" if $count > 1;
          }
          push @tbl, [ 'Boss', $zonetags, join(', ', @names),
-            join(' ', sort keys %$tags) ];
+            show_tags($tags) ];
          if (my $pics = $monsters{'boss-pics'}) {
             my $span = @tbl - $top;
             $tbl[$top][4] = "rowspan=$span align=center valign=bottom | "
@@ -215,6 +215,13 @@ sub show_waves {
       print $OUT "| $_\n" foreach @$row;
    }
    print $OUT "|}\n\n";
+}
+
+sub show_tags {
+   my ($tags) = @_;
+   return join ' ',
+      map { $favored_enemies{$_} ? "'''$_'''" : $_ }
+      sort keys %$tags;
 }
 
 sub add_monster {
