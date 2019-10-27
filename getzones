@@ -155,6 +155,13 @@ sub show_waves {
                add_monster($static->{$key}, \%monsters);
             }
          }
+         if (my $generators = $props->{monster_generators}) {
+            foreach my $key (sort keys %$generators) {
+               my $gen = $generators->{$key};
+               my $id = $gen->{monster_id} or next;
+               add_monster({ monster_id=>$id }, \%monsters);
+            }
+         }
       }
 
       my $zonetags = '';
