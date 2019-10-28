@@ -139,12 +139,13 @@ sub show_waves {
       add_monster_list($area->{monsters}, \%monsters);
       if (my $waves = $area->{waves}) {
          foreach my $i (0 .. $#$waves) {
-            add_monster_list($waves->[$i], \%monsters, $i >= $#$waves);
+            my $boss = $i >= $#$waves ? 1 : undef;
+            add_monster_list($waves->[$i], \%monsters, $boss);
          }
       }
       if (my $props = $area->{properties}) {
          add_monster_hash($props->{static_monsters}, \%monsters);
-         add_monster_gen($props->{monster_generators}, \%monsters);
+         add_monster_gen($props->{monster_generators}, \%monsters, 0);
       }
 
       my $zonetags = '';
@@ -248,7 +249,7 @@ sub add_monster_gen {
 sub add_monster_info {
    my ($info, $monst_info, $boss) = @_;
    return unless $info;
-   $boss ||= $info->{boss};
+   $boss //= $info->{boss};
    if (my $id = $info->{monster_id}) {
       add_monster($id, $monst_info, $boss);
    }
@@ -263,11 +264,10 @@ sub add_monster {
    my ($id, $monst_info, $boss) = @_;
    return unless $id;
    my $monst = $monsters->{$id} or die;
-   my $type = $boss ? 'boss' : 'trash';
    my %tags;
    $tags{$_} = 1 foreach @{$monst->{tags}};
    return if $tags{non_monster};
-   $type = 'boss' if $tags{boss};
+   my $type = $boss // $tags{boss} ? 'boss' : 'trash';
    $monst_info->{"$type-names"}{$monst->{name}}++;
    $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
