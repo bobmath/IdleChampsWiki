@@ -136,32 +136,15 @@ sub show_waves {
    foreach my $num (sort { $a <=> $b } keys %$areas) {
       my $area = $areas->{$num};
       my %monsters;
-      if (my $monsters = $area->{monsters}) {
-         foreach my $id (@$monsters) {
-            add_monster({ monster_id=>$id }, \%monsters);
-         }
-      }
+      add_monster_list($area->{monsters}, \%monsters);
       if (my $waves = $area->{waves}) {
          foreach my $i (0 .. $#$waves) {
-            my $boss = $i >= $#$waves;
-            foreach my $id (@{$waves->[$i]}) {
-               add_monster({ monster_id=>$id, boss=>$boss }, \%monsters);
-            }
+            add_monster_list($waves->[$i], \%monsters, $i >= $#$waves);
          }
       }
       if (my $props = $area->{properties}) {
-         if (my $static = $props->{static_monsters}) {
-            foreach my $key (sort keys %$static) {
-               add_monster($static->{$key}, \%monsters);
-            }
-         }
-         if (my $generators = $props->{monster_generators}) {
-            foreach my $key (sort keys %$generators) {
-               my $gen = $generators->{$key};
-               my $id = $gen->{monster_id} or next;
-               add_monster({ monster_id=>$id }, \%monsters);
-            }
-         }
+         add_monster_hash($props->{static_monsters}, \%monsters);
+         add_monster_gen($props->{monster_generators}, \%monsters);
       }
 
       my $zonetags = '';
@@ -231,10 +214,56 @@ sub show_tags {
       sort keys %$tags;
 }
 
+sub add_monster_list {
+   my ($list, $monst_info, $boss) = @_;
+   return unless $list;
+   foreach my $id (@$list) {
+      add_monster($id, $monst_info, $boss);
+   }
+}
+
+sub add_monster_hash {
+   my ($hash, $monst_info, $boss) = @_;
+   return unless $hash;
+   foreach my $key (sort keys %$hash) {
+      add_monster_info($hash->{$key}, $monst_info, $boss);
+   }
+}
+
+sub add_monster_gen {
+   my ($generators, $monst_info, $boss) = @_;
+   return unless $generators;
+   foreach my $key (sort keys %$generators) {
+      my $gen = $generators->{$key};
+      add_monster_info($gen, $monst_info, $boss);
+      add_monster_info($gen->{first_wave}, $monst_info, $boss);
+      if (my $opts = $gen->{options}) {
+         foreach my $opt (@$opts) {
+            add_monster_info($opt, $monst_info, $boss);
+         }
+      }
+   }
+}
+
+sub add_monster_info {
+   my ($info, $monst_info, $boss) = @_;
+   return unless $info;
+   $boss ||= $info->{boss};
+   if (my $id = $info->{monster_id}) {
+      add_monster($id, $monst_info, $boss);
+   }
+   if (my $ids = $info->{monster_ids}) {
+      foreach my $id (@$ids) {
+         add_monster($id, $monst_info, $boss);
+      }
+   }
+}
+
 sub add_monster {
-   my ($info, $monst_info) = @_;
-   my $monst = $monsters->{$info->{monster_id}} or die;
-   my $type = $info->{boss} ? 'boss' : 'trash';
+   my ($id, $monst_info, $boss) = @_;
+   return unless $id;
+   my $monst = $monsters->{$id} or die;
+   my $type = $boss ? 'boss' : 'trash';
    my %tags;
    $tags{$_} = 1 foreach @{$monst->{tags}};
    return if $tags{non_monster};
@@ -247,17 +276,16 @@ sub add_monster {
       $tags->{'armor-based'}++ if $props->{armor_based_damage};
       $tags->{'hit-based'}++ if $props->{hits_based_damage};
       if (my $spawn = $props->{spawns_monster_on_death}) {
+         if (my $id = $spawn->{monster_id}) {
+            add_monster($id, $monst_info, $boss);
+         }
          if (my $ids = $spawn->{monster_ids}) {
             foreach my $id (@$ids) {
-               add_monster({ monster_id=>$id, boss=>$info->{boss} },
-                  $monst_info);
+               add_monster($id, $monst_info, $boss);
             }
          }
-         if (my $id = $spawn->{monster_id}) {
-            add_monster({ monster_id=>$id, boss=>$info->{boss} }, $monst_info);
-         }
-      }
-   }
+      } # spawn
+   } # props
 }
 
 sub show_advent {
