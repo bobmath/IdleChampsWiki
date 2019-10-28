@@ -20,11 +20,12 @@ $json->canonical(1);
    my $seq = 0;
    my $frame = 0;
    my $outfile = 'frame';
-   my ($infile, $flip, $list, $help);
+   my ($infile, $scale, $flip, $list, $help);
    GetOptions('in|i=s' => \$infile,
       'char|c=s' => \$char,
       'seq|s=i' => \$seq,
       'frame|f=s' => \$frame,
+      'scale|S=f' => \$scale,
       'flip|p' => \$flip,
       'list|l' => \$list,
       'out|o=s' => \$outfile,
@@ -39,6 +40,7 @@ Options:
       all/2  every second frame
       0-9    range of frames
       1,2,5  specific frames 
+   --scale=scale factor
    --flip  flip horizontally
    --list  list characters in file
    --out=output file prefix
@@ -93,6 +95,7 @@ END
 
    my $surf = Cairo::ImageSurface->create('argb32', 10, 10);
    my $ctx = Cairo::Context->create($surf);
+   $ctx->scale($scale, $scale) if $scale;
    $ctx->scale(-1, 1) if $flip;
    my @bound = anim_bounds($ctx, $sequence, @frames) or die 'nothing to draw';
    my $x = ceil(-$bound[0]);
@@ -104,6 +107,7 @@ END
       $surf = Cairo::ImageSurface->create('argb32', $w, $h);
       $ctx = Cairo::Context->create($surf);
       $ctx->translate($x, $y);
+      $ctx->scale($scale, $scale) if $scale;
       $ctx->scale(-1, 1) if $flip;
       draw_frame($ctx, $graphics, $sequence, $num);
       $surf->flush();
