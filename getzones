@@ -378,11 +378,13 @@ sub get_rewards {
    foreach my $reward (@$rewards) {
       my $type = $reward->{reward};
       if ($type eq 'red_rubies') {
-         push @rewards, "{{Gems|size=32px|×$reward->{amount}}}";
+         my $num = commify($reward->{amount});
+         push @rewards, "{{Gems|size=32px|×$num}}";
       }
       elsif ($type eq 'patron_currency') {
          my $what = $patron_coins{$reward->{patron_id}} || 'UnknownCoin';
-         push @rewards, "{{$what|×$reward->{amount}}}";
+         my $num = commify($reward->{amount});
+         push @rewards, "{{$what|×$num}}";
       }
       elsif ($type eq 'patron_influence') {
          my $who = $patron_names{$reward->{patron_id}} || 'Unknown';
@@ -470,5 +472,18 @@ sub sci {
    $x = sprintf('%.2e', $x);
    $x =~ s/e\+?0*/e/;
    return $x
+}
+
+sub commify {
+   my ($x) = @_;
+   my ($num, $tail) = $x =~ /^(\d+)(.*)/ or return $x;
+   my @parts;
+   my $pos = length($num);
+   while ($pos > 3) {
+      $pos -= 3;
+      push @parts, substr($num, $pos, 3);
+   }
+   push @parts, substr($num, 0, $pos);
+   return join(',', reverse @parts) . $tail;
 }
 
