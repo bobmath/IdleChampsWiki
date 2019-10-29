@@ -138,7 +138,6 @@ my %effkey_ops = (
    time_scale_when_not_attacked => 'mul',
    unflinching_hatred => 'mul',
    walnut_jobs_done => 'mul',
-   wolfnut => 'heal',
    wulfgar_bounty_contribution => 'mul',
 );
 
@@ -328,7 +327,7 @@ sub do_upgrade {
       my $mile = $hero->{_milestones}[-1];
       $hero->{_abils} .= "'''<u>Specialization Choice – Level $level</u>'''\n\n"
          unless $mile->{_specs};
-      $hero->{_abils} .= "'''{{Spec|size=32px|$spec}}'''\n\n";
+      $hero->{_abils} .= ":'''{{Spec|size=32px|$spec}}'''\n\n";
       $specpos = length($hero->{_abils});
       push @{$hero->{_specs}}, [] unless $mile->{_specs};
       push @{$hero->{_specs}[-1]}, $spec;
@@ -357,7 +356,7 @@ sub do_upgrade {
          }
          $desc .= $more;
       }
-      substr($hero->{_abils}, $specpos, 0, "$desc\n\n") if $desc;
+      substr($hero->{_abils}, $specpos, 0, ":$desc\n\n") if $desc;
    }
 
    if (my $unlock = $upg->{_unlock}) {
@@ -454,6 +453,10 @@ sub do_effect {
    }
    elsif ($key eq 'set_ultimate_attack') {
       do_ultimate($hero, $upg, $params->{attack_id});
+   }
+   elsif ($key eq 'wolfnut') {
+      do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, '');
+      do_base_attack($hero, $upg, $params->{attack_id});
    }
 }
 
