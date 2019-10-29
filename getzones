@@ -132,7 +132,7 @@ sub show_waves {
    my ($OUT, $areas) = @_;
    return unless $areas;
    my $top = 0;
-   my (@tbl, %trash_totals, %boss_totals);
+   my (@tbl, %trash_totals, %boss_totals, @desc);
    foreach my $num (sort { $a <=> $b } keys %$areas) {
       my $area = $areas->{$num};
       my %monsters;
@@ -146,6 +146,12 @@ sub show_waves {
       if (my $props = $area->{properties}) {
          add_monster_hash($props->{static_monsters}, \%monsters);
          add_monster_gen($props->{monster_generators}, \%monsters, 0);
+         if (my $help = $props->{helper_display}) {
+            if (my $desc = $help->{description}) {
+               $desc =~ s/\|/\n\n/g;
+               push @desc, "'''Area $num''' – $desc\n\n";
+            }
+         }
       }
 
       my $zonetags = '';
@@ -206,6 +212,10 @@ sub show_waves {
       print $OUT "| $_\n" foreach @$row;
    }
    print $OUT "|}\n\n";
+
+   if (@desc) {
+      print $OUT "===Descriptions===\n", @desc;
+   }
 }
 
 sub show_tags {
