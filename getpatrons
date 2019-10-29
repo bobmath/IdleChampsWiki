@@ -43,6 +43,7 @@ foreach my $patron (@{$defines->{patron_defines}}) {
 sub show_items {
    my ($OUT, $patron) = @_;
    my $items = $patron_items->{$patron->{id}} or return;
+   @$items = sort { $a->{order} <=> $b->{order} } @$items;
    my $coin = $patron_coin{$patron->{id}} || 'UnknownCoin';
    print $OUT "==Shop==\n",
       qq[{| class="wikitable"\n],
@@ -59,6 +60,9 @@ sub show_items {
                my $s = $val == 1 ? '' : 's';
                push @limit, "{{NoWrap|$val purchase$s}}";
             }
+            elsif ($prop eq 'display_requirements') { }
+            elsif ($prop eq 'real_money') { }
+            elsif ($prop eq 'shop_properties') { }
             else {
                push @limit, '???';
             }
