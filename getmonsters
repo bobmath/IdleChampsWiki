@@ -1,0 +1,137 @@
+#!/usr/bin/env perl
+use utf8;
+use strict;
+use warnings;
+use JSON ();
+
+my $json = JSON->new();
+#$json->boolean_values(0, 1);
+$json->indent(1);
+$json->canonical(1);
+
+my $monsters = load_defines('monster_defines');
+my ($attacks, $graphics) = load_other();
+
+my @properties = qw(
+   armor_based_damage
+   die_after_damage_hero
+   dies_at_formation
+   hits_based_damage
+   impassable
+   indestructible
+   insta_kill
+   stun_immune
+);
+
+{
+   my %monst_names;
+   foreach my $id (sort { $a <=> $b } keys %$monsters) {
+      my $monst = $monsters->{$id};
+      push @{$monst_names{$monst->{name}}}, $monst;
+   }
+
+   mkdir 'monsters';
+   foreach my $name (sort keys %monst_names) {
+      print "$name\n";
+      (my $file = $name) =~ s/\W+/_/g;
+      open my $OUT, '>', "monsters/$file" or die;
+      my %cats;
+      print $OUT qq[<ul class="hlist">\n];
+
+      foreach my $monst (@{$monst_names{$name}}) {
+         print $OUT "<li>\n{{Monster\n";
+         if (my $grname = $graphics->{$monst->{graphic_id}}) {
+            my $shortname = $grname;
+            $shortname =~ s/^Monster_//;
+            $shortname =~ s/^.*?_//;
+            print $OUT "| name = \u$shortname\n";
+            print $OUT "| imgname = $grname.png\n";
+         }
+
+         my $n = 0;
+         if (my $att = $monst->{attack_id}) {
+            $n++;
+            print $OUT "| attack_$n = $attacks->{$att}\n";
+         }
+
+         my $props = $monst->{properties};
+         if ($props && (my $more_att = $props->{more_attacks})) {
+            foreach my $att (@$more_att) {
+               my $id = $att->{attack_id} or next;
+               $n++;
+               print $OUT "| attack_$n = $attacks->{$id}\n";
+            }
+         }
+
+         if (my $tags = $monst->{tags}) {
+            $n = 0;
+            foreach my $tag (sort @$tags) {
+               my $uc = ucfirst $tag;
+               $n++;
+               print $OUT "| tags$n = $uc\n";
+               $cats{$uc} = 1;
+            }
+         }
+
+         if ($props) {
+            my @props;
+            foreach my $p (@properties) {
+               push @props, $p if $props->{$p};
+            }
+            push @props, 'stun_immune' unless $props->{allow_stun} // 1;
+            foreach my $p (@props) {
+               print $OUT "| $p = true\n";
+               my $uc = ucfirst($p);
+               $uc =~ s/_/ /g;
+               $cats{$uc} = 1;
+            }
+         }
+
+         print $OUT "}}\n</li>\n";
+      }
+
+      print $OUT "</ul>\n";
+      print $OUT "[[Category:$_]]\n" foreach sort keys %cats;
+      close $OUT;
+   }
+
+   system 'diff -ur oldmonsters monsters' if -d 'oldmonsters';
+}
+
+sub load_defines {
+   my ($name) = @_;
+   opendir my $DIR, "defines/$name" or die;
+   my $data = {};
+   local $/ = undef;
+   foreach my $file (readdir $DIR) {
+      next if $file =~ /\D/;
+      open my $IN, '<:utf8', "defines/$name/$file" or die;
+      $data->{$file} = $json->decode(<$IN>);
+      close $IN;
+   }
+   closedir $DIR;
+   return $data;
+}
+
+sub load_other {
+   my ($name) = @_;
+   open my $IN, '<:utf8', 'define.json' or die;
+   local $/ = undef;
+   my $defines = $json->decode(<$IN>);
+   close $IN;
+
+   my $attacks = {};
+   foreach my $att (@{$defines->{attack_defines}}) {
+      $attacks->{$att->{id}} = $att->{name};
+   }
+
+   my $graphics = {};
+   foreach my $gr (@{$defines->{graphic_defines}}) {
+      my $name = $gr->{graphic} or next;
+      $name =~ s{^.*/}{};
+      $graphics->{$gr->{id}} = $name;
+   }
+
+   return ($attacks, $graphics);
+}
+
