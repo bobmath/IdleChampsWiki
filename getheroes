@@ -250,7 +250,7 @@ sub do_hero {
    }
 
    $hero->{_milestones} = [{ _level => 1, _cost => sci($hero->{base_cost}) }];
-   $hero->{_cost} = $hero->{_total_cost} = $hero->{base_cost};
+   $hero->{_total_cost} = $hero->{base_cost};
 
    do_bonus($hero, {}, 'Damage', 'base', $hero->{base_damage});
    do_bonus($hero, {}, 'Damage All', 'base', undef);
@@ -306,10 +306,16 @@ sub do_upgrade {
       die if keys(%$curve) > 1;
       my $mult = $curve->{1} or die;
       my $tot = 0;
-      while ($old_level < $level) {
-         $old_level++;
-         $tot += int($hero->{_cost} + 0.5);
-         $hero->{_cost} *= $mult;
+      my $cost = $hero->{base_cost} * $mult ** ($old_level - 1);
+      if ($hero->{_total_cost} < 1e16) {
+         while ($old_level < $level) {
+            $old_level++;
+            $tot += int($cost + 0.5);
+            $cost *= $mult;
+         }
+      }
+      else {
+         $tot = $cost * ($mult ** ($level - $old_level) - 1) / ($mult - 1);
       }
       push @{$hero->{_milestones}}, { _level => $level, _cost => sci($tot) };
       $hero->{_total_cost} += $tot;
