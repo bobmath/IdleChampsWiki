@@ -307,7 +307,7 @@ sub do_upgrade {
       my $mult = $curve->{1} or die;
       my $tot = 0;
       my $cost = $hero->{base_cost} * $mult ** ($old_level - 1);
-      if ($hero->{_total_cost} < 1e16) {
+      if ($cost < 1e16) {
          while ($old_level < $level) {
             $old_level++;
             $tot += int($cost + 0.5);
@@ -315,6 +315,7 @@ sub do_upgrade {
          }
       }
       else {
+         # this calculates the same result, without rounding
          $tot = $cost * ($mult ** ($level - $old_level) - 1) / ($mult - 1);
       }
       push @{$hero->{_milestones}}, { _level => $level, _cost => sci($tot) };
