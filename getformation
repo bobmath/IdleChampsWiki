@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+use utf8;
 use strict;
 use warnings;
 use Cairo ();
@@ -18,7 +19,7 @@ my $pi = 3.141592653589793;
 my $adv = read_json("adventure_defines/$adv_id");
 my $camp = read_json("campaign_defines/$adv->{campaign_id}");
 
-my ($form, @escorts);
+my ($form, @escorts, @heroes);
 foreach my $changes ($camp->{game_changes}, $adv->{game_changes}) {
    next unless $changes;
    foreach my $change (@$changes) {
@@ -33,10 +34,9 @@ foreach my $changes ($camp->{game_changes}, $adv->{game_changes}) {
          push @escorts, @{$change->{escorts}};
       }
       elsif ($type eq 'force_use_heroes') {
-         foreach my $slot (@{$change->{forced_slots}}) {
-            $slot->{_hero} = 1;
-            push @escorts, $slot;
-         }
+         my $slots = $change->{forced_slots} or die;
+         die unless @$slots == 1;
+         @heroes = @{$slots->[0]{slots}};
       }
    }
 }
@@ -50,7 +50,7 @@ formation_bounds();
 
 foreach my $escort  (@escorts) {
    $escort->{min_area} ||= 1;
-   $escort->{slot_ids} ||= $escort->{slots} || [ $escort->{slot_id} ];
+   $escort->{slot_ids} ||= [ $escort->{slot_id} ];
 }
 @escorts = sort { $a->{min_area} <=> $b->{min_area} } @escorts;
 unshift @escorts, { min_area => 1, slot_ids => [] }
@@ -82,10 +82,13 @@ sub draw_simple {
       $slot->{block} = $slot->{hero} = 0;
    }
 
+   foreach my $id (@heroes) {
+      $slots->[$id]{hero}++;
+   }
+
    foreach my $escort (@escorts) {
-      my $what = $escort->{_hero} ? 'hero' : 'block';
       foreach my $id (@{$escort->{slot_ids}}) {
-         $slots->[$id]{$what}++;
+         $slots->[$id]{block}++;
       }
    }
 
@@ -95,7 +98,7 @@ sub draw_simple {
       if ($slot->{block} == @escorts) {
          draw_x($ctx, $x, $y, $scale);
       }
-      elsif ($slot->{hero} == @escorts) {
+      elsif ($slot->{hero} == 1) {
          draw_box($ctx, $x, $y, $scale);
       }
       elsif ($slot->{block} == 0 && $slot->{hero} == 0) {
