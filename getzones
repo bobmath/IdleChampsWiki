@@ -52,6 +52,7 @@ my $monsters = load_defines('monster_defines');
 my $campaigns = load_defines('campaign_defines');
 my $favors = load_defines('reset_currency_defines');
 my $backgrounds = load_defines('background_defines');
+my $advents = load_defines('adventure_defines');
 
 {
    my $sets = {};
@@ -60,7 +61,6 @@ my $backgrounds = load_defines('background_defines');
       $sets->{$area->{area_set_id}}{areas}{$area->{area_id}} = $area;
    }
 
-   my $advents = load_defines('adventure_defines');
    foreach my $adv_id (sort { $a <=> $b } keys %$advents) {
       my $advent = $advents->{$adv_id};
       next if $advent->{name} =~ /^Free Play/;
@@ -308,10 +308,33 @@ sub show_advent {
       "|description=$adv->{description}\n";
 
    my $n;
+   foreach my $req (@{$adv->{requirements}}) {
+      my $cond = $req->{condition};
+      my $text;
+      if ($cond eq 'adventure_complete') {
+         my $prev = $advents->{$req->{adventure_id}} or die;
+         my $name = $prev->{name};
+         $name = "[[$name]]" unless $adv->{variant_adventure_id};
+         $text = qq[Must have completed "$name"];
+      }
+      elsif ($cond eq 'adventures_completed') {
+         my $prev = $campaigns->{$req->{campaign_id}} or die;
+         $text = "Must have completed $req->{count} $prev->{short_name} "
+            . "adventures or variants";
+      }
+      elsif ($cond eq 'time_gate_open') {
+         my $name = $hero_names{$req->{champion_id}} or die;
+         $text = "Must have an open $name Time Gate";
+      }
+      else {
+         die $cond unless $cond eq 'not' || $cond eq 'date'
+            || $cond eq 'client_version'
+            || $cond eq 'event_year_unlocked';
+      }
+      print $OUT "|requirement", ++$n, "=$text\n" if defined $text;
+   }
    foreach my $req (split /\s*\n/, $adv->{requirements_text}) {
-      next if $req eq 'No requirements';
-      $req =~ s/^(Must have completed ")(.*?)(")$/$1\[[$2]]$3/g
-         unless $adv->{variant_adventure_id};
+      next unless $req =~ /^Costs/;
       print $OUT "|requirement", ++$n, "=$req\n";
    }
 
