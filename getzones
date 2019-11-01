@@ -48,6 +48,12 @@ my %favored_enemies = (
    'undead'      => 'Minsc, Nerys, Zorbu',
 );
 
+my %event_tokens = (
+   1  => "[[File:Icon_Harvest_Baskets.png|24px]] Harvest Baskets",
+   2  => "[[File:Icon_Liars_Tarts.png|24px]] Liars' Tarts",
+   49 => "[[File:Icon_Owlbear_Feathers.png|24px]] Owlbear Feathers",
+);
+
 my $monsters = load_defines('monster_defines');
 my $campaigns = load_defines('campaign_defines');
 my $favors = load_defines('reset_currency_defines');
@@ -333,9 +339,17 @@ sub show_advent {
       }
       print $OUT "|requirement", ++$n, "=$text\n" if defined $text;
    }
-   foreach my $req (split /\s*\n/, $adv->{requirements_text}) {
-      next unless $req =~ /^Costs/;
-      print $OUT "|requirement", ++$n, "=$req\n";
+   if (my $costs = $adv->{costs}) {
+      my @cost;
+      foreach my $cost (@$costs) {
+         die unless $cost->{cost} eq 'event_tokens';
+         my $name = $event_tokens{$cost->{event_id}} or die;
+         push @cost, "$cost->{amount} $name";
+      }
+      if (@cost) {
+         my $text = "Costs @cost to start";
+         print $OUT "|requirement", ++$n, "=$text\n";
+      }
    }
 
    print $OUT "|objectives=$adv->{objectives_text}\n";
