@@ -48,23 +48,10 @@ my @properties = qw(
             print $OUT "| imgname = $grname.png\n";
          }
 
-         my $n = 0;
-         if (my $att = $monst->{attack_id}) {
-            $n++;
-            print $OUT "| attack_$n = $attacks->{$att}\n";
-         }
-
-         my $props = $monst->{properties};
-         if ($props && (my $more_att = $props->{more_attacks})) {
-            foreach my $att (@$more_att) {
-               my $id = $att->{attack_id} or next;
-               $n++;
-               print $OUT "| attack_$n = $attacks->{$id}\n";
-            }
-         }
+         show_attacks($OUT, $monst);
 
          if (my $tags = $monst->{tags}) {
-            $n = 0;
+            my $n = 0;
             foreach my $tag (sort @$tags) {
                my $uc = ucfirst $tag;
                $n++;
@@ -73,7 +60,7 @@ my @properties = qw(
             }
          }
 
-         if ($props) {
+         if (my $props = $monst->{properties}) {
             my @props;
             foreach my $p (@properties) {
                push @props, $p if $props->{$p};
@@ -113,6 +100,31 @@ sub load_defines {
    return $data;
 }
 
+sub show_attacks {
+   my ($OUT, $monst) = @_;
+   my @attacks = ( $monst->{attack_id} );
+   if (my $more = $monst->{properties}{more_attacks}) {
+      foreach my $att (@$more) {
+         push @attacks, $att->{attack_id};
+      }
+   }
+
+   my $n = 0;
+   my %seen;
+   while (@attacks) {
+      my $id = shift @attacks or next;
+      next if $seen{$id};
+      $seen{$id} = 1;
+      my $att = $attacks->{$id} or die;
+      $n++;
+      print $OUT "| attack_$n = $att->{name}\n";
+      foreach my $anim (@{$att->{animations}}) {
+         push @attacks, $anim->{chain_attack_id},
+            $anim->{update_base_attack_after};
+      }
+   }
+}
+
 sub load_other {
    my ($name) = @_;
    open my $IN, '<:utf8', 'define.json' or die;
@@ -122,7 +134,7 @@ sub load_other {
 
    my $attacks = {};
    foreach my $att (@{$defines->{attack_defines}}) {
-      $attacks->{$att->{id}} = $att->{name};
+      $attacks->{$att->{id}} = $att;
    }
 
    my $graphics = {};
