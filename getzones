@@ -146,7 +146,7 @@ sub show_waves {
       add_monster_list($area->{monsters}, \%monsters);
       if (my $waves = $area->{waves}) {
          foreach my $i (0 .. $#$waves) {
-            my $boss = $i >= 2;
+            my $boss = $i >= 2 ? 1 : undef;
             add_monster_list($waves->[$i], \%monsters, $boss);
          }
       }
