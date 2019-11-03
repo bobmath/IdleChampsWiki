@@ -108,7 +108,8 @@ my $advents = load_defines('adventure_defines');
       my $navtab = $navtabs{$adv->{campaign_id}} || 'events';
       print $OUT "{{Navbox-Adventures|show=$navtab}}\n",
          "{{Navbox-IdleChampions}}\n",
-         "[[Category:Adventures]]\n";
+         "[[Category:Adventures]]\n",
+         "[[Category:$camp->{name}]]\n";
       close $OUT;
    }
 
@@ -145,7 +146,7 @@ sub show_waves {
       add_monster_list($area->{monsters}, \%monsters);
       if (my $waves = $area->{waves}) {
          foreach my $i (0 .. $#$waves) {
-            my $boss = $i >= $#$waves ? 1 : undef;
+            my $boss = $i >= 2;
             add_monster_list($waves->[$i], \%monsters, $boss);
          }
       }
