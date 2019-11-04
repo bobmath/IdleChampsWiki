@@ -71,7 +71,7 @@ sub show_zones {
    my $sets = {};
    my $areas = load_defines('adventure_area_defines');
    foreach my $area (values %$areas) {
-      $sets->{$area->{area_set_id}}{areas}{$area->{area_id}} = $area;
+      $sets->{$area->{area_set_id}}{areas}[$area->{area_id}] = $area;
    }
 
    foreach my $adv_id (sort { $a <=> $b } keys %$advents) {
@@ -123,8 +123,8 @@ sub show_waves {
    return unless $areas;
    my $top = 0;
    my (@tbl, %trash_totals, %boss_totals, @desc);
-   foreach my $num (sort { $a <=> $b } keys %$areas) {
-      my $area = $areas->{$num};
+   foreach my $num (0 .. $#$areas) {
+      my $area = $areas->[$num] or next;
       my %monsters;
       add_monster_list($area->{monsters}, \%monsters);
       if (my $waves = $area->{waves}) {
