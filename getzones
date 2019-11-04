@@ -9,7 +9,7 @@ my $json = JSON->new();
 $json->indent(1);
 $json->canonical(1);
 
-my (%hero_names, %hero_skins, %chest_types, %graphics);
+my (%hero_names, %hero_skins, %chest_types, %graphics, %effects);
 load_heroes();
 
 my %patron_names = (
@@ -60,7 +60,14 @@ my $favors = load_defines('reset_currency_defines');
 my $backgrounds = load_defines('background_defines');
 my $advents = load_defines('adventure_defines');
 
-{
+
+mkdir 'zones';
+mkdir 'rawzones';
+show_zones();
+show_campaigns();
+system 'diff', '-ur', 'oldzones', 'zones' if -d 'oldzones';
+
+sub show_zones {
    my $sets = {};
    my $areas = load_defines('adventure_area_defines');
    foreach my $area (values %$areas) {
@@ -73,9 +80,6 @@ my $advents = load_defines('adventure_defines');
       my $set_id = $advent->{area_set_id};
       push @{$sets->{$set_id}{advents}}, $advent;
    }
-
-   mkdir 'zones';
-   mkdir 'rawzones';
 
    foreach my $set_id (sort { $a <=> $b } keys %$sets) {
       my $set = $sets->{$set_id};
@@ -112,27 +116,6 @@ my $advents = load_defines('adventure_defines');
          "[[Category:$camp->{name}]]\n";
       close $OUT;
    }
-
-   my $locations = load_defines('location_defines');
-   for my $camp_id (sort { $a <=> $b } keys %$campaigns) {
-      my $camp = $campaigns->{$camp_id} or next;
-      my $locs = $camp->{_locations} or next;
-      my $filename = make_filename($camp->{name}, $camp_id);
-      open my $OUT, '>:utf8', "zones/$filename" or die;
-      foreach my $loc_id (sort { $a <=> $b } keys %$locs) {
-         my $loc = $locations->{$loc_id} or next;
-         print $OUT "*$loc->{name}\n";
-         foreach my $zone (@{$locs->{$loc_id}}) {
-            my @names = map "[[$_->{name}]]", @$zone;
-            my $line = shift @names;
-            $line .= ' – ' . join(', ', @names) if @names;
-            print $OUT "**$line\n";
-         }
-      }
-      close $OUT;
-   }
-
-   system 'diff', '-ur', 'oldzones', 'zones' if -d 'oldzones';
 }
 
 sub show_waves {
@@ -458,6 +441,140 @@ sub get_rewards {
    return @rewards;
 }
 
+sub show_campaigns {
+   my $tiers = load_defines('reset_tier_defines');
+   foreach my $tier (values %$tiers) {
+      $favors->{$tier->{reset_currency_id}}{_tiers}{$tier->{tier_id}} = $tier;
+   }
+
+   my $upgrades = load_defines('reset_upgrade_defines');
+   foreach my $id (sort { $a <=> $b } keys %$upgrades) {
+      my $upg = $upgrades->{$id};
+      my $tier = $favors->{$upg->{reset_currency_id}}{_tiers}{$upg->{tier_id}}
+         or die;
+      push @{$tier->{_upgrades}}, $upg;
+      my @desc;
+      foreach my $eff (@{$upg->{effects}}) {
+         my @eff = split /,/, $eff->{effect_string};
+         my $desc = $eff->{override_desc}
+            || $effects{$eff[0] eq 'effect_def' ? $eff[1] : $eff[0]}
+            or next;
+         $eff->{_eff} = \@eff;
+         $desc =~ s{\$(\w+|\(.*?\))}{
+            my $str = $1;
+            get_effect_val($str, $eff) // '$' . $str;
+         }eg;
+         push @desc, $desc;
+      }
+      $upg->{_desc} = join ' and ', @desc;
+      my $props = $upg->{properties};
+      $props = {} unless ref($props) eq 'HASH';
+      $upg->{_desc} .= ' over all Campaigns' if $upg->{type} == 2
+         && !$props->{remove_global_text};
+   }
+
+   my $locations = load_defines('location_defines');
+   for my $camp_id (sort { $a <=> $b } keys %$campaigns) {
+      my $camp = $campaigns->{$camp_id} or next;
+      my $locs = $camp->{_locations} or next;
+      my $filename = make_filename($camp->{name}, $camp_id);
+      open my $OUT, '>:utf8', "zones/$filename" or die;
+      print $OUT "==Adventures==\n";
+      foreach my $loc_id (sort { $a <=> $b } keys %$locs) {
+         my $loc = $locations->{$loc_id} or next;
+         print $OUT "*$loc->{name}\n";
+         foreach my $zone (@{$locs->{$loc_id}}) {
+            my @names = map "[[$_->{name}]]", @$zone;
+            my $line = shift @names;
+            $line .= ' – ' . join(', ', @names) if @names;
+            print $OUT "**$line\n";
+         }
+      }
+      print $OUT "\n";
+      show_blessings($OUT, $favors->{$camp->{reset_currency_id}});
+      close $OUT;
+   }
+}
+
+sub show_blessings {
+   my ($OUT, $favor) = @_;
+   return unless $favor;
+   my $tiers = $favor->{_tiers} or return;
+   (my $name = $favor->{name}) =~ s/'s.*//;
+   print $OUT "==Blessings==\n",
+      "Adventures in this campaign grant {{DivineFavor|$name|$favor->{name}}}",
+      ", which can be used to purchase the following blessings.\n",
+      qq[{| class="wikitable"\n|-\n],
+      "! Name !! Description !! Base&nbsp;Cost !! Levels !! Total&nbsp;Cost\n";
+   for my $tid (sort { $a <=> $b } keys %$tiers) {
+      my $tier = $tiers->{$tid};
+      my $desc = "Tier $tid";
+      foreach my $req (@{$tier->{requirements}}) {
+         my $type = $req->{type};
+         if ($type eq 'reset_upgrades_purchased') {
+            $desc .= " – Requires $req->{amount} Blessings";
+         }
+         else {
+            $desc .= ' – ???';
+         }
+      }
+      print $OUT "|-\n| colspan=5 | $desc\n";
+
+      foreach my $upg (@{$tier->{_upgrades}}) {
+         my $base = $upg->{cost}{base_cost};
+         my $mult = $upg->{cost}{scaling};
+         my $num = $upg->{levels};
+         my $total = $mult == 1 ? $base * $num
+            : $base * ($mult ** $num - 1) / ($mult - 1);
+         $base = sci($base);
+         $total = sci($total);
+         print $OUT "|-\n| '''$upg->{name}'''\n| $upg->{_desc}\n",
+            "| $base || $num || $total\n";
+      }
+   }
+   print $OUT "|}\n\n";
+}
+
+sub get_effect_val {
+   my ($str, $eff) = @_;
+   $str = $1 if $str =~ /^\((.*)\)$/;
+   if ($str eq 'amount') {
+      return $eff->{per_level} if $eff->{per_level};
+      return if $eff->{_eff}[0] eq 'effect_def';
+      return $eff->{_eff}[1];
+   }
+   elsif ($str eq 'as_multiplier amount') {
+      return $eff->{per_level} / 100 + 1;
+   }
+   elsif ($str eq 'describe_rarity rarity') {
+      return 'Epic';
+   }
+   elsif ($str eq 'describe_tags tag') {
+      return $eff->{_eff}[2];
+   }
+   elsif ($str eq 'describe_tags tag_expression') {
+      return $eff->{_eff}[2];
+   }
+   elsif ($str eq 'reset_currency_name optional_currency') {
+      my $favor = $favors->{$eff->{_eff}[2]} or return;
+      return $favor->{name};
+   }
+   elsif ($str eq 'seconds_comparison_description') {
+      my $op = $eff->{_eff}[2] or return;
+      my $val = $eff->{_eff}[3] or return;
+      return "greater than $val seconds" if $op eq '>';
+      return "$val seconds or lower" if $op eq '<=';
+   }
+   elsif ($str eq 'seconds_plural amount') {
+      my $sec = $eff->{per_level} or return;
+      return "$sec seconds";
+   }
+   elsif ($str eq 'target') {
+      return $eff->{target_name} || 'all Champions';
+   }
+   return;
+}
+
 sub load_defines {
    my ($name) = @_;
    opendir my $DIR, "defines/$name" or die;
@@ -488,6 +605,16 @@ sub load_heroes {
          $name =~ s{^.*/}{};
          $graphics{$graphic->{id}} = $name;
       }
+   }
+
+   foreach my $eff (@{$data->{effect_key_defines}}) {
+      my $desc = $eff->{descriptions};
+      next unless ref($desc) eq 'HASH';
+      $effects{$eff->{key}} = $desc->{desc};
+   }
+
+   foreach my $eff (@{$data->{effect_defines}}) {
+      $effects{$eff->{id}} = $eff->{description};
    }
 }
 
