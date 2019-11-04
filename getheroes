@@ -1166,7 +1166,7 @@ END
          }
          elsif ($type eq 'patron') {
             if (my $curr = $patron_currency{$src->{patron_id}}) {
-               my $coins = $src->{_cost}{patron_currency};
+               my $coins = commify($src->{_cost}{patron_currency});
                push @cost, "{{$curr|size=$size|$coins}}";
             }
             else {
