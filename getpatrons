@@ -27,6 +27,8 @@ my %patron_coin = (
 my $patron_items = build_multi_index($defines->{patron_shop_item_defines},
    'patron_id');
 
+get_perks();
+
 mkdir 'patrons';
 
 foreach my $patron (@{$defines->{patron_defines}}) {
@@ -36,8 +38,42 @@ foreach my $patron (@{$defines->{patron_defines}}) {
    print "$filename\n";
    open my $OUT, '>:utf8', "patrons/$filename" or die;
    print $OUT "==Background==\n{{Quote|$patron->{description}}}\n\n";
+   if (my $reqs = $patron->{restrictions_text}) {
+      print $OUT "==Restrictions==\n";
+      foreach my $rid (sort { $a <=> $b } keys %$reqs) {
+         print $OUT "*$reqs->{$rid}\n";
+      }
+      print $OUT "\n";
+   }
+   show_perks($OUT, $patron);
    show_items($OUT, $patron);
    close $OUT;
+}
+
+sub show_perks {
+   my ($OUT, $patron) = @_;
+   my $tiers = $patron->{_tiers} or return;
+   print $OUT "==Perks==\n",
+      qq[{| class="wikitable"\n|-\n],
+      "! Name !! Description !! Scope ",
+      "!! Base&nbsp;Cost !! Levels !! Total&nbsp;Cost\n";
+   foreach my $tid (sort { $a <=> $b } keys %$tiers) {
+      my $tier = $tiers->{$tid};
+      print $OUT "|-\n| colspan=6 | $tier->{_desc}\n";
+      foreach my $perk (@{$tier->{_perks}}) {
+         my $scope = $perk->{type} == 2 ? 'Global' : 'Local';
+         my $base = $perk->{cost}{base_cost};
+         my $mult = $perk->{cost}{scaling};
+         my $num = $perk->{levels};
+         my $total = $mult == 1 ? $base * $num
+            : $base * ($mult ** $num - 1) / ($mult - 1);
+         $base = sci($base);
+         $total = sci($total);
+         print $OUT "|-\n| '''$perk->{name}'''\n| $perk->{_desc}\n",
+            "| $scope || $base || $num || $total\n";
+      }
+   }
+   print $OUT "|}\n\n";
 }
 
 sub show_items {
@@ -46,7 +82,7 @@ sub show_items {
    @$items = sort { $a->{order} <=> $b->{order} } @$items;
    my $coin = $patron_coin{$patron->{id}} || 'UnknownCoin';
    print $OUT "==Shop==\n",
-      qq[{| class="wikitable"\n],
+      qq[{| class="wikitable"\n|-\n],
       "! Item !! Description !! Limit !! Requirement !! Cost\n";
    foreach my $item (@$items) {
       my @limit;
@@ -103,6 +139,73 @@ sub show_items {
          join(" ", "|", @cost), "\n";
    }
    print $OUT "|}\n\n";
+}
+
+sub get_perks {
+   my $patrons = build_index($defines->{patron_defines});
+   my $effects = build_index($defines->{effect_defines});
+   my $effkeys = build_index($defines->{effect_key_defines}, 'key');
+   foreach my $tier (@{$defines->{patron_perk_tier_defines}}) {
+      my $patron = $patrons->{$tier->{patron_id}} or die;
+      $patron->{_tiers}{$tier->{tier_id}} = $tier;
+      $tier->{_desc} = "Tier $tier->{tier_id}";
+      foreach my $req (@{$tier->{requirements}}) {
+         my $type = $req->{condition};
+         if ($type eq 'patron_perks_purchased') {
+            $tier->{_desc} .= " – Requires $req->{amount} Perks";
+         }
+         else {
+            $tier->{_desc} .= ' – ???';
+         }
+      }
+   }
+   foreach my $perk (@{$defines->{patron_perk_defines}}) {
+      my $patron = $patrons->{$perk->{patron_id}} or die;
+      my $tier = $patron->{_tiers}{$perk->{tier_id}} ||= {};
+      push @{$tier->{_perks}}, $perk;
+      my @desc;
+      foreach my $eff (@{$perk->{effects}}) {
+         my @eff = split /,/, $eff->{effect_string};
+         my $desc = ($eff[0] eq 'effect_def'
+            ? $effects->{$eff[1]}{description}
+            : $effkeys->{$eff[0]}{descriptions}{desc}) or next;
+         $eff->{_eff} = \@eff;
+         $desc =~ s{\$(\w+|\(.*?\))}{
+            my $str = $1;
+            get_effect_val($str, $eff) // '$' . $str;
+         }eg;
+         push @desc, $desc;
+      }
+      $perk->{_desc} = "@desc";
+   }
+}
+
+sub get_effect_val {
+   my ($str, $eff) = @_;
+   $str = $1 if $str =~ /^\((.*)\)$/;
+   if ($str eq 'amount') {
+      return $eff->{per_level};
+   }
+   elsif ($str eq 'describe_tags tag') {
+      return $eff->{_eff}[2];
+   }
+   elsif ($str eq 'target') {
+      return 'all Champions';
+   }
+   return;
+}
+
+sub build_index {
+   my ($table, $key) = @_;
+   die unless $table;
+   $key ||= 'id';
+   my $index = {};
+   foreach my $item (@$table) {
+      my $id = $item->{$key} or die;
+      die if exists $index->{$id};
+      $index->{$id} = $item;
+   }
+   return $index;
 }
 
 sub build_multi_index {
