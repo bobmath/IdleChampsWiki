@@ -89,7 +89,14 @@ sub show_zones {
       push @{$camp->{_locations}{$adv->{location_id}}}, $variants;
       my $filename = make_filename($adv->{name}, $set_id);
       print $filename, "\n";
-      open my $OUT, '>:utf8', "zones/$filename" or die;
+      if (my $areas = $set->{areas}) {
+         @$areas = sort { $a->{area_id} <=> $b->{area_id} } @$areas;
+      }
+      open my $OUT, '>:utf8', "rawzones/$filename" or die;
+      print $OUT $json->encode($set);
+      close $OUT;
+
+      open $OUT, '>:utf8', "zones/$filename" or die;
       print $OUT "'''$adv->{name}''' is one of the [[adventures]] ",
          "in the campaign [[$camp->{name}]].\n\n";
       show_advent($OUT, $adv);
@@ -111,17 +118,12 @@ sub show_zones {
          "[[Category:Adventures]]\n",
          "[[Category:$camp->{name}]]\n";
       close $OUT;
-
-      open $OUT, '>:utf8', "rawzones/$filename" or die;
-      print $OUT $json->encode($set);
-      close $OUT;
    }
 }
 
 sub show_waves {
    my ($OUT, $areas) = @_;
    return unless $areas;
-   @$areas = sort { $a->{area_id} <=> $b->{area_id} } @$areas;
    my $top = 0;
    my (@tbl, %trash_totals, %boss_totals, @desc);
    foreach my $area (@$areas) {
