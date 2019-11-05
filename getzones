@@ -71,7 +71,7 @@ sub show_zones {
    my $sets = {};
    my $areas = load_defines('adventure_area_defines');
    foreach my $area (values %$areas) {
-      $sets->{$area->{area_set_id}}{areas}[$area->{area_id}] = $area;
+      push @{$sets->{$area->{area_set_id}}{areas}}, $area;
    }
 
    foreach my $adv_id (sort { $a <=> $b } keys %$advents) {
@@ -121,10 +121,10 @@ sub show_zones {
 sub show_waves {
    my ($OUT, $areas) = @_;
    return unless $areas;
+   @$areas = sort { $a->{area_id} <=> $b->{area_id} } @$areas;
    my $top = 0;
    my (@tbl, %trash_totals, %boss_totals, @desc);
-   foreach my $num (0 .. $#$areas) {
-      my $area = $areas->[$num] or next;
+   foreach my $area (@$areas) {
       my %monsters;
       add_monster_list($area->{monsters}, \%monsters);
       if (my $waves = $area->{waves}) {
@@ -139,7 +139,7 @@ sub show_waves {
          if (my $help = $props->{helper_display}) {
             if (my $desc = $help->{description}) {
                $desc =~ s/\|/\n\n/g;
-               push @desc, "'''Area $num''' – $desc\n\n";
+               push @desc, "'''Area $area->{area_id}''' – $desc\n\n";
             }
          }
       }
@@ -154,7 +154,7 @@ sub show_waves {
 
       if (my $names = $monsters{'trash-names'}) {
          my $tags = $monsters{'trash-tags'} ||= {};
-         push @tbl, [ $num, $zonetags,
+         push @tbl, [ $area->{area_id}, $zonetags,
             join(', ', map "[[$_]]", sort keys %$names),
             show_tags($tags) ];
          $trash_totals{$_}++ foreach keys %$tags;
