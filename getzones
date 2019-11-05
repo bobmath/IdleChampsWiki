@@ -89,11 +89,7 @@ sub show_zones {
       push @{$camp->{_locations}{$adv->{location_id}}}, $variants;
       my $filename = make_filename($adv->{name}, $set_id);
       print $filename, "\n";
-      open my $OUT, '>:utf8', "rawzones/$filename" or die;
-      print $OUT $json->encode($set);
-      close $OUT;
-      open $OUT, '>:utf8', "zones/$filename" or die;
-
+      open my $OUT, '>:utf8', "zones/$filename" or die;
       print $OUT "'''$adv->{name}''' is one of the [[adventures]] ",
          "in the campaign [[$camp->{name}]].\n\n";
       show_advent($OUT, $adv);
@@ -114,6 +110,10 @@ sub show_zones {
          "{{Navbox-IdleChampions}}\n",
          "[[Category:Adventures]]\n",
          "[[Category:$camp->{name}]]\n";
+      close $OUT;
+
+      open $OUT, '>:utf8', "rawzones/$filename" or die;
+      print $OUT $json->encode($set);
       close $OUT;
    }
 }
