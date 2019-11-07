@@ -53,6 +53,7 @@ my @properties = qw(
          if (my $tags = $monst->{tags}) {
             my $n = 0;
             foreach my $tag (sort @$tags) {
+               next if $tag eq 'hits_based';
                my $uc = ucfirst $tag;
                $n++;
                print $OUT "| tags$n = $uc\n";
