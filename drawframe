@@ -25,7 +25,7 @@ $json->canonical(1);
       'char|c=s' => \$char,
       'seq|s=i' => \$seq,
       'frame|f=s' => \$frame,
-      'scale|S=f' => \$scale,
+      'scale=f' => \$scale,
       'flip|p' => \$flip,
       'list|l' => \$list,
       'out|o=s' => \$outfile,
