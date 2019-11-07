@@ -34,7 +34,7 @@ foreach my $changes ($camp->{game_changes}, $adv->{game_changes}) {
          push @escorts, @{$change->{escorts}};
       }
       elsif ($type eq 'force_use_heroes') {
-         my $slots = $change->{forced_slots} or die;
+         my $slots = $change->{forced_slots} or next;
          die unless @$slots == 1;
          @heroes = @{$slots->[0]{slots}};
       }
