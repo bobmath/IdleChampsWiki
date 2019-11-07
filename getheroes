@@ -132,6 +132,7 @@ my %effkey_ops = (
    regis_bounty_contribution => 'mul',
    regis_healing => 'heal',
    return_source_dps_when_hit => 'mul',
+   sentry_aerois_synergy_contribution => 'mul',
    shandie_arrows => 'addstack',
    single_target_damage_buff => 'mul',
    sneak_attack_hit => 'mul',
@@ -437,6 +438,9 @@ sub do_effect {
       my $targ = $upgrades->{$params->{id}} or die;
       do_bonus($hero, $upg, $targ->{name}, 'basepow', $amt);
    }
+   elsif ($key eq 'create_echo') {
+      do_echo($hero, $upg, $eff);
+   }
    elsif ($key eq 'effect_def') {
       do_effect_def($hero, $upg, $eff);
    }
@@ -467,6 +471,17 @@ sub do_effect {
       do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, '');
       do_base_attack($hero, $upg, $params->{attack_id});
    }
+}
+
+sub do_echo {
+   my ($hero, $upg, $eff) = @_;
+   $eff->{_echo} = my $echo = parse_effect("effect_def,495,496,494");
+   my $desc;
+   foreach my $effdef (@{$echo->{_effects}}) {
+      my $effdesc = $effdef->{_desc} ||= effect_string($hero, $effdef);
+      $desc .= "\n* " . $effdef->{properties}{effect_name} . ': ' . $effdesc;
+   }
+   $eff->{_params}{echo_description} = $desc;
 }
 
 sub do_mirror {
@@ -1479,7 +1494,7 @@ sub effect_string {
    $desc ||= $eff->{description} or return;
    $desc =~ s/\r//g;
    $desc =~ s/\^/\n/g;
-   $desc =~ s/^\w+'s Contibution: \$.*//ms;
+   $desc =~ s/^\w+'s Contr?ibution: \$.*\nTotal Aerois Synergy Pool:.*//ms;
    my @desc = split /(\$(?:\w+|\(.*?\)))/, $desc;
    $desc = '';
    my $copy = 1;
