@@ -51,6 +51,7 @@ my %favored_enemies = (
 my %event_tokens = (
    1  => "[[File:Icon_Harvest_Baskets.png|24px]] Harvest Baskets",
    2  => "[[File:Icon_Liars_Tarts.png|24px]] Liars' Tarts",
+   3  => "[[File:Icon_Skulls.png|24px]] Skulls",
    49 => "[[File:Icon_Owlbear_Feathers.png|24px]] Owlbear Feathers",
 );
 
@@ -271,6 +272,7 @@ sub add_monster {
    $tags{$_} = 1 foreach @{$monst->{tags}};
    return if $tags{non_monster};
    my $type = $boss // $tags{boss} ? 'boss' : 'trash';
+   $tags{'hit-based'} = 1 if delete $tags{hits_based};
    $monst_info->{"$type-names"}{$monst->{name}}++;
    $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
