@@ -34,7 +34,7 @@ my @properties = qw(
    foreach my $name (sort keys %monst_names) {
       print "$name\n";
       (my $file = $name) =~ s/\W+/_/g;
-      open my $OUT, '>', "monsters/$file" or die;
+      open my $OUT, '>:utf8', "monsters/$file" or die;
       my %cats;
       print $OUT qq[<ul class="hlist">\n];
 
@@ -73,6 +73,7 @@ my @properties = qw(
                $uc =~ s/_/ /g;
                $cats{$uc} = 1;
             }
+            show_spawn($OUT, $props->{spawns_monster_on_death});
          }
 
          print $OUT "}}\n</li>\n";
@@ -84,6 +85,26 @@ my @properties = qw(
    }
 
    system 'diff -ur oldmonsters monsters' if -d 'oldmonsters';
+}
+
+sub show_spawn {
+   my ($OUT, $spawn) = @_;
+   my @ids;
+   if (my $id = $spawn->{monster_id}) { push @ids,  $id }
+   if (my $ids = $spawn->{monster_ids}) { push @ids,  @$ids }
+   my %spawn;
+   foreach my $id (@ids) {
+      my $monst = $monsters->{$id} or die;
+      $spawn{$monst->{name}}++;
+   }
+   my @spawn;
+   foreach my $name (sort keys %spawn) {
+      my $count = $spawn{$name};
+      $name = "[[$name]]";
+      $name .= " ×$count" if $count > 1;
+      push @spawn, $name;
+   }
+   print $OUT "| spawn_on_death = @spawn\n" if @spawn;
 }
 
 sub load_defines {
