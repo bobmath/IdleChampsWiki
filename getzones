@@ -60,12 +60,13 @@ my $campaigns = load_defines('campaign_defines');
 my $favors = load_defines('reset_currency_defines');
 my $backgrounds = load_defines('background_defines');
 my $advents = load_defines('adventure_defines');
-
+my %enemy_types;
 
 mkdir 'zones';
 mkdir 'rawzones';
 show_zones();
 show_campaigns();
+show_enemies();
 system 'diff', '-ur', 'oldzones', 'zones' if -d 'oldzones';
 
 sub show_zones {
@@ -111,20 +112,21 @@ sub show_zones {
          }
       }
 
-      show_waves($OUT, $set->{areas});
+      show_waves($OUT, $adv, $set->{areas});
 
       my $navtab = $navtabs{$adv->{campaign_id}} || 'events';
       print $OUT "{{Navbox-Adventures|show=$navtab}}\n",
          "{{Navbox-IdleChampions}}\n",
-         "[[Category:Adventures]]\n",
-         "[[Category:$camp->{name}]]\n";
+         "[[Category:Adventures]]\n";
+      print $OUT "[[Category:$camp->{name}]]\n" unless $navtab eq 'events';
       close $OUT;
    }
 }
 
 sub show_waves {
-   my ($OUT, $areas) = @_;
+   my ($OUT, $adv, $areas) = @_;
    return unless $areas;
+   my $camp = $campaigns->{$adv->{campaign_id}};
    my $top = 0;
    my (@tbl, %trash_totals, %boss_totals, @desc);
    foreach my $area (@$areas) {
@@ -186,15 +188,20 @@ sub show_waves {
 
    $trash_totals{$_} += 0 foreach keys %boss_totals;
    return unless %trash_totals;
+   my $regular = !$adv->{variant_adventure_id}
+      && $navtabs{$adv->{campaign_id}} && $adv->{id} > 1;
    print $OUT qq[==Waves==\n{| class="wikitable sortable"\n],
       "|-\n! Type !! Waves !! Bosses !! Favored By\n";
    foreach my $tag (sort keys %trash_totals) {
       next if $tag eq 'boss' || $tag eq 'static';
+      my $count = $trash_totals{$tag};
       my $boss_count = $boss_totals{$tag} || 0;
       my $favored = $favored_enemies{$tag} || '';
       $favored = ' ' . $favored if $favored;
       print $OUT "|- align=center\n",
-         "| $tag || $trash_totals{$tag} || $boss_count ||$favored\n";
+         "| $tag || $count || $boss_count ||$favored\n";
+      push @{$enemy_types{$tag}}, [ $adv->{name}, $camp->{short_name},
+         $count, $boss_count ] if $regular;
    }
    print $OUT "|}\n\n";
 
@@ -217,6 +224,30 @@ sub show_tags {
    return join ' ',
       map { $favored_enemies{$_} ? "'''$_'''" : $_ }
       sort keys %$tags;
+}
+
+sub show_enemies {
+   open my $OUT, '>', "zones/Enemy_types_by_location" or die;
+   print $OUT "This page shows where to find enemies of a given type. ",
+      "In particular, [[#Construct|Construct]], [[#Fey|Fey]], ",
+      "[[#Humaniod|Humaniod]], and [[#Undead|Undead]] ",
+      "often appear as [[patron]] challenges.\n\n";
+   foreach my $type (sort keys %enemy_types) {
+      next if $type eq 'melee' || $type eq 'ranged';
+      my $zones = $enemy_types{$type};
+      @$zones = sort { $b->[2] <=> $a->[2] || $b->[3] <=> $a->[3]
+         || $a->[0] cmp $b->[0] } @$zones;
+      print $OUT "==\u$type==\n",
+         qq[{| class="wikitable sortable"\n],
+         "|-\n! Location !! Campaign !! Waves !! Bosses\n";
+      foreach my $zone (@$zones) {
+         print $OUT "|-\n| [[$zone->[0]]] || $zone->[1] ",
+            "|| $zone->[2] || $zone->[3]\n";
+      }
+      print $OUT qq[|}\n\n];
+   }
+   print $OUT "[[Category:Bestiary| ]]\n";
+   close $OUT;
 }
 
 sub add_monster_list {
@@ -273,6 +304,7 @@ sub add_monster {
    return if $tags{non_monster};
    my $type = $boss // $tags{boss} ? 'boss' : 'trash';
    $tags{'hit-based'} = 1 if delete $tags{hits_based};
+   $tags{'armor-based'} = 1 if delete $tags{armor_based};
    $monst_info->{"$type-names"}{$monst->{name}}++;
    $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
