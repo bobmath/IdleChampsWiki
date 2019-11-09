@@ -415,6 +415,9 @@ sub do_effect {
    elsif ($key eq 'buff_aila_ult_bonus_dmg') {
       do_bonus($hero, $upg, 'Storm Herald Bonus', 'mul', $amt);
    }
+   elsif ($key eq 'buff_amplification_amount') {
+      do_bonus($hero, $upg, 'Echo Amplification', 'mul', $amt);
+   }
    elsif ($key eq 'buff_upgrade') {
       do_buff_upgrade($hero, $upg, $params->{id}, $amt,
          $params->{optional_effect_index}) unless $eff->{_cond};
@@ -479,7 +482,10 @@ sub do_echo {
    my $desc;
    foreach my $effdef (@{$echo->{_effects}}) {
       my $effdesc = $effdef->{_desc} ||= effect_string($hero, $effdef);
-      $desc .= "\n* " . $effdef->{properties}{effect_name} . ': ' . $effdesc;
+      my $name = $effdef->{properties}{effect_name};
+      $desc .= "\n* $name: $effdesc";
+      my $amt = $effdef->{effect_keys}[0]{_params}{amount};
+      do_bonus($hero, $upg, "Echo $name", 'base', $amt, '%') if $amt;
    }
    $eff->{_params}{echo_description} = $desc;
 }
