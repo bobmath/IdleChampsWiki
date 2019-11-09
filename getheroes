@@ -418,6 +418,9 @@ sub do_effect {
    elsif ($key eq 'buff_amplification_amount') {
       do_bonus($hero, $upg, 'Echo Amplification', 'mul', $amt);
    }
+   elsif ($key eq 'buff_crit_chance') {
+      do_bonus($hero, $upg, 'Crit Chance', 'mul', $amt);
+   }
    elsif ($key eq 'buff_upgrade') {
       do_buff_upgrade($hero, $upg, $params->{id}, $amt,
          $params->{optional_effect_index}) unless $eff->{_cond};
@@ -898,6 +901,7 @@ sub show_milestones {
 
    my $milestones = $hero->{_milestones};
    foreach my $mile (@$milestones) {
+      die if keys(%$mile) <= 2;
       my $spec = $mile->{_specs} or next;
       push @{$mile->{_unlock}}, '{{Abbr|Specialization Choice|'
          . join(' or ', @$spec) . '}}';
