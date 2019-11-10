@@ -60,6 +60,8 @@ my $campaigns = load_defines('campaign_defines');
 my $favors = load_defines('reset_currency_defines');
 my $backgrounds = load_defines('background_defines');
 my $advents = load_defines('adventure_defines');
+my $dialogue = load_defines('cinematics_defines');
+my $quests = load_defines('quest_defines');
 my %enemy_types;
 
 mkdir 'zones';
@@ -93,6 +95,7 @@ sub show_zones {
       print $filename, "\n";
       if (my $areas = $set->{areas}) {
          @$areas = sort { $a->{area_id} <=> $b->{area_id} } @$areas;
+         get_dialogue($areas);
       }
       open my $OUT, '>:utf8', "rawzones/$filename" or die;
       print $OUT $json->encode($set);
@@ -120,6 +123,23 @@ sub show_zones {
          "[[Category:Adventures]]\n";
       print $OUT "[[Category:$camp->{name}]]\n" unless $navtab eq 'events';
       close $OUT;
+   }
+}
+
+sub get_dialogue {
+   my ($areas) = @_;
+   foreach my $area (@$areas) {
+      if (my $qid = $area->{quest_id}) {
+         $area->{_quest} = $quests->{$qid};
+      }
+      my $id = $area->{cinematics_id} or next;
+      $area->{_dialogue} = my $dia = $dialogue->{$id};
+      foreach my $detail (@{$dia->{details}}) {
+         foreach my $line (@{$detail->{sequence}}) {
+            my $hid = $line->{hero_id} or next;
+            $line->{_hero} = $hero_names{$hid};
+         }
+      }
    }
 }
 
@@ -614,6 +634,7 @@ sub get_effect_val {
 
 sub load_defines {
    my ($name) = @_;
+   print "Loading $name\n";
    opendir my $DIR, "defines/$name" or die;
    my $data = {};
    local $/ = undef;
