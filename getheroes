@@ -933,7 +933,14 @@ print $OUT <<END;
 ! width="75px" | Level
 ! width="75px" | {{Abbr|Cost|Cost in gold from previous row}}
 END
-   print $OUT "! $_\n" foreach @$order;
+   foreach my $col (@$order) {
+      if ($col eq 'Damage') {
+         print $OUT "! {{Abbr|Damage|Multiplied by level}}\n";
+      }
+      else {
+         print $OUT "! $col\n";
+      }
+   }
 
    foreach my $mile (@$milestones) {
       my @cols;
