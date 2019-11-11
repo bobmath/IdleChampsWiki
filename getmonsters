@@ -43,7 +43,7 @@ my @properties = qw(
          if (my $grname = $graphics->{$monst->{graphic_id}}) {
             my $shortname = $grname;
             $shortname =~ s/^Monster_//;
-            $shortname =~ s/^.*?_//;
+            $shortname =~ s/^.*?_(?=[[:alpha:]])//;
             print $OUT "| name = \u$shortname\n";
             print $OUT "| imgname = $grname.png\n";
          }
