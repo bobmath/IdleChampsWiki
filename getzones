@@ -406,7 +406,35 @@ sub show_advent {
    }
    print $OUT "|rewards=@rewards\n" if @rewards;
 
-   my $form = get_formation($adv) || "Formation $picname.png";
+   my $form = $formations{$adv->{campaign_id}};
+   my %monsters;
+   if (my $changes = $adv->{game_changes}) {
+      foreach my $change (@$changes) {
+         my $type = $change->{type};
+         if ($type eq 'formation'
+            || $type eq 'slot_escort'
+            || $type eq 'slot_escort_by_area'
+            || $type eq 'force_use_heroes')
+         {
+            undef $form;
+         }
+         elsif ($type eq 'only_allow_crusaders') {
+            undef $form if $change->{by_tags}{target_slots};
+         }
+         elsif ($type eq 'guaranteed_monster'
+            || $type eq 'random_monster'
+            || $type eq 'random_monster_waves')
+         {
+            get_monsters(\%monsters, $change);
+         }
+         elsif ($type eq 'guaranteed_monsters') {
+            foreach my $area (@{$change->{by_area}}) {
+               get_monsters(\%monsters, $area);
+            }
+         }
+      }
+   }
+   $form ||= "Formation $picname.png";
    print $OUT "|formation=$form\n";
 
    my $patrons = $adv->{patron_objectives};
@@ -441,23 +469,23 @@ sub show_advent {
       }
    }
 
+   if (%monsters) {
+      my $monst = join ', ', map "[[$_]]", sort keys %monsters;
+      print $OUT "|additional=$monst\n";
+   }
+
    print $OUT "}}\n\n";
 }
 
-sub get_formation {
-   my ($adv) = @_;
-   if (my $changes = $adv->{game_changes}) {
-      foreach my $change (@$changes) {
-         my $type = $change->{type};
-         return if $type eq 'formation'
-            || $type eq 'slot_escort'
-            || $type eq 'slot_escort_by_area'
-            || $type eq 'force_use_heroes';
-         return if $type eq 'only_allow_crusaders'
-            && $change->{by_tags}{target_slots};
-      }
+sub get_monsters {
+   my ($monst_list, $info) = @_;
+   my @ids;
+   if (my $id = $info->{monster_id}) { push @ids, $id }
+   if (my $ids = $info->{monster_ids}) { push @ids, @$ids }
+   foreach my $id (@ids) {
+      my $monst = $monsters->{$id} or next;
+      $monst_list->{$monst->{name}}++;
    }
-   return $formations{$adv->{campaign_id}};
 }
 
 sub get_rewards {
