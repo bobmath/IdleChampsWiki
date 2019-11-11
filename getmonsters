@@ -23,6 +23,13 @@ my @properties = qw(
    stun_immune
 );
 
+my @modifiers = qw(
+   damage_modifier
+   gold_modifier
+   health_modifier
+   speed_modifier
+);
+
 {
    my %monst_names;
    foreach my $id (sort { $a <=> $b } keys %$monsters) {
@@ -74,6 +81,12 @@ my @properties = qw(
                $cats{$uc} = 1;
             }
             show_spawn($OUT, $props->{spawns_monster_on_death});
+         }
+
+         foreach my $mod (@modifiers) {
+            my $val = $monst->{$mod};
+            next unless defined($val);
+            print $OUT "| $mod = $val\n";
          }
 
          print $OUT "}}\n</li>\n";
