@@ -210,10 +210,8 @@ print $IDX <<END;
 ! data-sort-type="number"|{{Abbr|Cost|Initial cost of the champion}}
 ! class="unsortable"|Icon
 ! Name
-! data-sort-type="number"|{{Abbr|Damage|Base damage multiplied by all 'Damage' a
-bilities}}
-! data-sort-type="number"|{{Abbr|DmgAll|Multiplied Bonus of all 'Damage All' abi
-lities}}
+! data-sort-type="number"|{{Abbr|Damage|Base damage times level cap and Damage upgrades}}
+! data-sort-type="number"|{{Abbr|DmgAll|Multiplied Bonus of all Damage All upgrades}}
 ! Race
 ! Class
 ! {{Abbr|AL|Alignment}}
@@ -229,7 +227,10 @@ foreach my $hero (@hero_defines) {
    do_hero($hero);
 }
 
-print $IDX "|}\n";
+print $IDX "|}\n\n",
+   "{{Navbox-Champions}}\n",
+   "{{Navbox-IdleChampions}}\n",
+   "[[Category:Champions| ]]\n";
 close $IDX;
 
 system 'diff -ur oldheroes heroes' if -d 'oldheroes';
@@ -255,7 +256,7 @@ sub do_hero {
    $hero->{_milestones} = [{ _level => 1, _cost => sci($hero->{base_cost}) }];
    $hero->{_total_cost} = $hero->{base_cost};
 
-   do_bonus($hero, {}, 'Damage', 'base', $hero->{base_damage});
+   do_bonus($hero, {_xlvl=>1}, 'Damage', 'base', $hero->{base_damage});
    do_bonus($hero, {}, 'Damage All', 'base', undef);
    do_bonus($hero, {}, 'Health', 'base', $hero->{base_health});
    do_base_attack($hero, {}, $hero->{base_attack_id});
@@ -303,7 +304,7 @@ sub do_upgrade {
    my ($hero, $upg) = @_;
    my $level = $upg->{required_level};
    return if $level >= 9999;
-   my $old_level = $hero->{_milestones}[-1]{_level};
+   my $old_level = $hero->{_level} ||= 1;
    if ($level > $old_level) {
       my $curve = $hero->{cost_curves};
       die if keys(%$curve) > 1;
@@ -323,6 +324,7 @@ sub do_upgrade {
       }
       push @{$hero->{_milestones}}, { _level => $level, _cost => sci($tot) };
       $hero->{_total_cost} += $tot;
+      $hero->{_level} = $level;
    }
 
    $upg->{_req} = '';
@@ -694,6 +696,7 @@ sub do_bonus {
    if ($op eq 'base') {
       $info->{base} = $val;
       $info->{unit} = $unit ||= '';
+      $abil->{_xlvl} = 1 if $upg->{_xlvl};
       return unless defined $val;
       $disp ||= sci($val) . $unit;
    }
@@ -720,7 +723,7 @@ sub do_bonus {
 
    if (defined $disp) {
       if ($op !~ /^base/) {
-         my $val = calc_total($abil, $req);
+         my $val = calc_total($hero, $name, $req);
          $disp = "{{Abbr|$disp|Total $val}}" if $val;
       }
       $disp = "{{Spec|$req|$disp}}" if $req;
@@ -769,7 +772,8 @@ sub attack_desc {
 }
 
 sub calc_total {
-   my ($abil, $req) = @_;
+   my ($hero, $name, $req) = @_;
+   my $abil = $hero->{_cols}{$name} or return;
    my $mods = $abil->{$req} or return;
    my $plain = $req ? $abil->{''} : {};
    if (my $val = $mods->{base} || $plain->{base}) {
@@ -777,6 +781,7 @@ sub calc_total {
       $val += $plain->{add} || 0;
       $val *= $plain->{mul} || 1;
       $val *= $mods->{mul} || 1;
+      $val *= $hero->{_level} if $abil->{_xlvl};
       return sci($val) . ($mods->{unit} // $plain->{unit} // '');
    }
    elsif ($val = $mods->{mul}) {
@@ -980,12 +985,12 @@ END
       if (my $abil = $hero->{_cols}{$col}) {
          my @tot;
          if ($abil->{''} && !all_specs($abil, $hero->{_specs})) {
-            my $tot = calc_total($abil, '') or next;
+            my $tot = calc_total($hero, $col, '') or next;
             push @tot, $tot;
          }
          foreach my $spec (@specs) {
             next unless $abil->{$spec};
-            my $tot = calc_total($abil, $spec) or next;
+            my $tot = calc_total($hero, $col, $spec) or next;
             push @tot, "{{Spec|$spec|$tot}}";
          }
          print $OUT "| ", join('<br>', @tot), "\n";
@@ -1229,8 +1234,8 @@ END
    my $align = $char->{alignment};
    my $stat = $char->{ability_scores} or die;
    $align =~ s/[a-z ]//g;
-   my $dmg = calc_total($hero->{_cols}{Damage}, '') || 0;
-   my $dmgAll = calc_total($hero->{_cols}{'Damage All'}, '') || '0%';
+   my $dmg = calc_total($hero, 'Damage', '') || 0;
+   my $dmgAll = calc_total($hero, 'Damage All', '') || '0%';
    my $base = sci( $hero->{base_cost} );
 
 print $IDX <<END;
