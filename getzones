@@ -564,6 +564,24 @@ sub show_campaigns {
       my $locs = $camp->{_locations} or next;
       my $filename = make_filename($camp->{name}, $camp_id);
       open my $OUT, '>:utf8', "zones/$filename" or die;
+
+      my @req;
+      foreach my $req (@{$camp->{requirements}}) {
+         my $type = $req->{condition} // '';
+         if ($type eq 'adventures_completed') {
+            push @req, "* Must have completed $req->{count} adventures\n";
+         }
+         elsif ($type eq 'client_version'
+            || $type eq 'time_gates_enabled'
+            || $type eq 'event_active')
+         {
+         }
+         else {
+            die $type;
+         }
+      }
+      print $OUT "==Requirements==\n", @req, "\n" if @req;
+
       print $OUT "==Adventures==\n";
       foreach my $loc_id (sort { $a <=> $b } keys %$locs) {
          my $loc = $locations->{$loc_id} or next;
@@ -600,7 +618,7 @@ sub show_blessings {
             $desc .= " – Requires $req->{amount} Blessings";
          }
          else {
-            $desc .= ' – ???';
+            die $type;
          }
       }
       print $OUT "|-\n| colspan=5 | $desc\n";
