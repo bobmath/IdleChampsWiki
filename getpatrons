@@ -50,6 +50,8 @@ foreach my $patron (@{$defines->{patron_defines}}) {
    close $OUT;
 }
 
+system 'diff -ur oldpatrons patrons' if -d 'oldpatrons';
+
 sub show_perks {
    my ($OUT, $patron) = @_;
    my $tiers = $patron->{_tiers} or return;
@@ -99,9 +101,7 @@ sub show_items {
             elsif ($prop eq 'display_requirements') { }
             elsif ($prop eq 'real_money') { }
             elsif ($prop eq 'shop_properties') { }
-            else {
-               push @limit, '???';
-            }
+            else { die $prop }
          }
       }
 
@@ -113,9 +113,7 @@ sub show_items {
             my $val = sci($req->{influence});
             push @req, "{{${name}Influence|$val}}";
          }
-         else {
-            push @req, '???';
-         }
+         else { die $cond }
       }
 
       my @cost;
@@ -155,7 +153,7 @@ sub get_perks {
             $tier->{_desc} .= " – Requires $req->{amount} Perks";
          }
          else {
-            $tier->{_desc} .= ' – ???';
+            die $type;
          }
       }
    }
