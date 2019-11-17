@@ -244,12 +244,15 @@ sub do_hero {
    open my $OUT, '>:utf8', "heroes/$filename" or die;
    open my $RAW, '>:utf8', "rawheroes/$filename" or die;
    print $RAW "Hero $filename ", $json->encode($hero), "\n";
-   show_header($OUT, $hero);
 
+   $hero->{_overwhelm} = [ 5 ];
    if (my $permanents = $hero->{properties}{permanent_effects}) {
       foreach my $perm (@$permanents) {
          my $eff = parse_effect($perm);
          print $RAW "Permanent ", $json->encode($eff), "\n";
+         if ($eff->{_key} eq 'overwhelm_start_increase') {
+            $hero->{_overwhelm}[0] += $eff->{_params}{amount} || 0;
+         }
       }
    }
 
@@ -275,6 +278,7 @@ sub do_hero {
       }
    }
 
+   show_header($OUT, $hero);
    print $OUT "==Abilities==\n", $hero->{_abils} if $hero->{_abils};
    show_bond($OUT, $hero);
    show_milestones($OUT, $hero);
@@ -471,6 +475,9 @@ sub do_effect {
    }
    elsif ($key eq 'mirror_image') {
       do_mirror($hero, $upg, $eff);
+   }
+   elsif ($key eq 'overwhelm_start_increase') {
+      push @{$hero->{_overwhelm}}, $hero->{_overwhelm}[0] + $amt;
    }
    elsif ($key eq 'set_ultimate_attack') {
       do_ultimate($hero, $upg, $params->{attack_id});
@@ -836,6 +843,8 @@ END
       }
    }
 
+   my $overwhelm = join ' / ', @{$hero->{_overwhelm}};
+
 print $OUT <<END;
 | class = $char->{class}
 | race = $char->{race}
@@ -843,6 +852,7 @@ print $OUT <<END;
 | alignment = $char->{alignment}
 | role = $role
 | group = $group
+| overwhelm = $overwhelm
 | str = $stat->{str} | dex = $stat->{dex} | con = $stat->{con}
 | int = $stat->{int} | wis = $stat->{wis} | cha = $stat->{cha}
 | base_cooldown = $att->{cooldown}
@@ -1134,8 +1144,12 @@ sub show_loot_template {
       my $pref_len = $info->{_pref_len}[0];
       my $suff_len = $info->{_suff_len}[0];
       print $OUT "|icon$slot=$info->{_icon}\n" if $info->{_icon};
-      print $OUT "|desc$slot=$info->{_prefix}[0]\n",
-         "|unit$slot=$info->{_suffix}[0]";
+      if (my $prefix = $info->{_prefix}[0]) {
+         print $OUT "|desc$slot=$prefix\n";
+      }
+      if (my $suffix = $info->{_suffix}[0]) {
+         print $OUT "|unit$slot=$suffix";
+      }
       foreach my $rarity (1 .. 4) {
          my $desc = $info->{$rarity}{effects}[0]{_desc} or next;
          my $val = substr($desc, $pref_len, -$suff_len) or next;
