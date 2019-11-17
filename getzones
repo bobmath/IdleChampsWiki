@@ -346,9 +346,20 @@ sub add_monster {
    $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
    $tags->{$_}++ foreach keys %tags;
+
    if (my $props = $monst->{properties}) {
       $tags->{'armor-based'}++ if $props->{armor_based_damage};
       $tags->{'hit-based'}++ if $props->{hits_based_damage};
+
+      if (my $ranges = $props->{first_health_ranges}) {
+         foreach my $range (@$ranges) {
+            my $type = $range->{type} or next;
+            if    ($type eq 'armor_based') { $tags->{'armor-based'}++ }
+            elsif ($type eq 'hits_based')  { $tags->{'hit-based'}++ }
+         }
+      }
+
+
       if (my $spawn = $props->{spawns_monster_on_death}) {
          if (my $id = $spawn->{monster_id}) {
             add_monster($id, $monst_info, $boss);

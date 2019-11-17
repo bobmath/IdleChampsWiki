@@ -69,12 +69,23 @@ my @modifiers = qw(
          }
 
          if (my $props = $monst->{properties}) {
-            my @props;
+            my %props;
             foreach my $p (@properties) {
-               push @props, $p if $props->{$p};
+               $props{$p} = 1 if $props->{$p};
             }
-            push @props, 'stun_immune' unless $props->{allow_stun} // 1;
-            foreach my $p (@props) {
+            $props{stun_immune} = 1 unless $props->{allow_stun} // 1;
+            if (my $ranges = $props->{first_health_ranges}) {
+               foreach my $range (@$ranges) {
+                  my $type = $range->{type} or next;
+                  if ($type eq 'armor_based') {
+                     $props{armor_based_damage} = 1;
+                  }
+                  elsif ($type eq 'hits_based') {
+                     $props{hits_based_damage} = 1;
+                  }
+               }
+            }
+            foreach my $p (sort keys %props) {
                print $OUT "| $p = true\n";
                my $uc = ucfirst($p);
                $uc =~ s/_/ /g;
