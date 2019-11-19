@@ -347,6 +347,9 @@ sub add_monster {
    my $tags = $monst_info->{"$type-tags"} ||= {};
    $tags->{$_}++ foreach keys %tags;
 
+   return if $monst_info->{ids}{$id};
+   $monst_info->{ids}{$id} = 1;
+
    if (my $props = $monst->{properties}) {
       $tags->{'armor-based'}++ if $props->{armor_based_damage};
       $tags->{'hit-based'}++ if $props->{hits_based_damage};
@@ -359,6 +362,11 @@ sub add_monster {
          }
       }
 
+      if (my $spawn = $props->{spawns_monster_ids}) {
+         foreach my $id (@$spawn) {
+            add_monster($id, $monst_info, $boss);
+         }
+      }
 
       if (my $spawn = $props->{spawns_monster_on_death}) {
          if (my $id = $spawn->{monster_id}) {
@@ -369,7 +377,7 @@ sub add_monster {
                add_monster($id, $monst_info, $boss);
             }
          }
-      } # spawn
+      } # spawn on death
    } # props
 }
 

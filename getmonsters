@@ -91,7 +91,7 @@ my @modifiers = qw(
                $uc =~ s/_/ /g;
                $cats{$uc} = 1;
             }
-            show_spawn($OUT, $props->{spawns_monster_on_death});
+            show_spawn($OUT, $props);
          }
 
          foreach my $mod (@modifiers) {
@@ -112,7 +112,20 @@ my @modifiers = qw(
 }
 
 sub show_spawn {
-   my ($OUT, $spawn) = @_;
+   my ($OUT, $props) = @_;
+   if (my $spawn = $props->{spawns_monster_ids}) {
+      my %spawn;
+      foreach my $id (@$spawn) {
+         my $monst = $monsters->{$id} or die;
+         $spawn{$monst->{name}}++;
+      }
+      if (%spawn) {
+      print $OUT "| spawn = ",
+         join(", ", map "[[$_]]", sort keys %spawn), "\n";
+      }
+   }
+
+   my $spawn = $props->{spawns_monster_on_death} or return;
    my @ids;
    if (my $id = $spawn->{monster_id}) { push @ids,  $id }
    if (my $ids = $spawn->{monster_ids}) { push @ids,  @$ids }
