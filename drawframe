@@ -57,7 +57,8 @@ END
          $n++;
          my $m = 0;
          foreach my $sequence (@{$character->{sequences}}) {
-            my $nframes = @{$sequence->[0]{sequence}};
+            my $frames = $sequence->[0]{sequence};
+            my $nframes = $frames ? @$frames : 0;
             print "   Sequence #$m: $nframes frame",
                ($nframes == 1 ? '' : 's'), "\n";
             $m++;
