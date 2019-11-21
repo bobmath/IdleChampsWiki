@@ -266,9 +266,9 @@ sub show_tags {
 sub show_enemies {
    open my $OUT, '>', "zones/Enemy_types_by_location" or die;
    print $OUT "This page shows where to find enemies of a given type. ",
-      "In particular, [[#Construct|Construct]], [[#Fey|Fey]], ",
-      "[[#Humaniod|Humaniod]], and [[#Undead|Undead]] ",
-      "often appear as [[patron]] challenges.\n\n";
+      "In particular, the following appear in [[patron]] challenges: ",
+      "[[#Beast|Beast]], [[#Construct|Construct]], [[#Fiend|Fiend]], ",
+      "[[#Humanoid|Humanoid]], and [[#Undead|Undead]].\n\n";
    foreach my $type (sort keys %enemy_types) {
       next if $type eq 'melee' || $type eq 'ranged';
       my $zones = $enemy_types{$type};
