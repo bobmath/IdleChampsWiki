@@ -17,7 +17,6 @@ my @properties = qw(
    die_after_damage_hero
    dies_at_formation
    hits_based_damage
-   impassable
    indestructible
    insta_kill
    stun_immune
@@ -74,6 +73,7 @@ my @modifiers = qw(
                $props{$p} = 1 if $props->{$p};
             }
             $props{stun_immune} = 1 unless $props->{allow_stun} // 1;
+            $props{impassable} = 1 unless $props->{passable} // 1;
             if (my $ranges = $props->{first_health_ranges}) {
                foreach my $range (@$ranges) {
                   my $type = $range->{type} or next;
