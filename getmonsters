@@ -60,7 +60,7 @@ my @modifiers = qw(
             my $n = 0;
             foreach my $tag (sort @$tags) {
                next if $tag eq 'hits_based' || $tag eq 'armor_based';
-               my $uc = ucfirst $tag;
+               (my $uc = $tag) =~ s/\b(\w)/\u$1/g;
                $n++;
                print $OUT "| tags$n = $uc\n";
                $cats{$uc} = 1;
