@@ -45,7 +45,7 @@ my @modifiers = qw(
       print $OUT qq[<ul class="hlist">\n];
 
       foreach my $monst (@{$monst_names{$name}}) {
-         print $OUT "<li>\n{{Monster\n";
+         print $OUT "<li>\n{{Monster\n| monster_id = $monst->{id}\n";
          if (my $grname = $graphics->{$monst->{graphic_id}}) {
             my $shortname = $grname;
             $shortname =~ s/^Monster_//;
