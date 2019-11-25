@@ -33,7 +33,8 @@ my @modifiers = qw(
    my %monst_names;
    foreach my $id (sort { $a <=> $b } keys %$monsters) {
       my $monst = $monsters->{$id};
-      push @{$monst_names{$monst->{name}}}, $monst;
+      my $name = $monst->{_name} // $monst->{name};
+      push @{$monst_names{$name}}, $monst;
    }
 
    mkdir 'monsters';
@@ -48,8 +49,7 @@ my @modifiers = qw(
          print $OUT "<li>\n{{Monster\n| monster_id = $monst->{id}\n";
          if (my $grname = $graphics->{$monst->{graphic_id}}) {
             my $shortname = $grname;
-            $shortname =~ s/^Monster_//;
-            $shortname =~ s/^.*?_(?=[[:alpha:]])//;
+            $shortname =~ s/^.*_(?=[[:alpha:]])//;
             print $OUT "| name = \u$shortname\n";
             print $OUT "| imgname = $grname.png\n";
          }

@@ -342,7 +342,8 @@ sub add_monster {
    my $type = $boss // $tags{boss} ? 'boss' : 'trash';
    $tags{'hit-based'} = 1 if delete $tags{hits_based};
    $tags{'armor-based'} = 1 if delete $tags{armor_based};
-   $monst_info->{"$type-names"}{$monst->{name}}++;
+   my $name = $monst->{_name} // $monst->{name};
+   $monst_info->{"$type-names"}{$name}++;
    $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
    $tags->{$_}++ foreach keys %tags;
@@ -521,7 +522,8 @@ sub get_monsters {
    if (my $ids = $info->{monster_ids}) { push @ids, @$ids }
    foreach my $id (@ids) {
       my $monst = $monsters->{$id} or next;
-      $monst_list->{$monst->{name}}++;
+      my $name = $monst->{_name} // $monst->{name};
+      $monst_list->{$name}++;
    }
 }
 
