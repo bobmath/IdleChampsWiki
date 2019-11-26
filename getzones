@@ -133,7 +133,7 @@ sub get_dialogue {
          $area->{_quest} = $quests->{$qid};
       }
       my $id = $area->{cinematics_id} or next;
-      $area->{_dialogue} = my $dia = $dialogue->{$id};
+      $area->{_dialogue} = my $dia = $dialogue->{$id} or next;
       foreach my $detail (@{$dia->{details}}) {
          foreach my $line (@{$detail->{sequence}}) {
             my $hid = $line->{hero_id} or next;
