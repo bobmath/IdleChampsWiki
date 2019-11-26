@@ -822,7 +822,6 @@ sub show_header {
    my $ult = $attacks->{$hero->{ultimate_attack_id}} or die;
    my $char = $hero->{character_sheet_details} or die;
    my $stat = $char->{ability_scores} or die;
-   my $age = int($char->{age});
 
    my $group = '';
    my $role = '';
@@ -848,7 +847,7 @@ END
 print $OUT <<END;
 | class = $char->{class}
 | race = $char->{race}
-| age = $age
+| age = $char->{age}
 | alignment = $char->{alignment}
 | role = $role
 | group = $group
