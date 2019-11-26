@@ -40,7 +40,7 @@ my @modifiers = qw(
    mkdir 'monsters';
    foreach my $name (sort keys %monst_names) {
       print "$name\n";
-      (my $file = $name) =~ s/\W+/_/g;
+      (my $file = $name) =~ s/\s+/_/g;
       open my $OUT, '>:utf8', "monsters/$file" or die;
       my %cats;
       print $OUT qq[<ul class="hlist">\n];
@@ -117,7 +117,8 @@ sub show_spawn {
       my %spawn;
       foreach my $id (@$spawn) {
          my $monst = $monsters->{$id} or die;
-         $spawn{$monst->{name}}++;
+         my $name = $monst->{_name} || $monst->{name};
+         $spawn{$name}++;
       }
       if (%spawn) {
       print $OUT "| spawn = ",
@@ -132,7 +133,8 @@ sub show_spawn {
    my %spawn;
    foreach my $id (@ids) {
       my $monst = $monsters->{$id} or die;
-      $spawn{$monst->{name}}++;
+      my $name = $monst->{_name} || $monst->{name};
+      $spawn{$name}++;
    }
    my @spawn;
    foreach my $name (sort keys %spawn) {
