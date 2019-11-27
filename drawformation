@@ -56,6 +56,16 @@ foreach my $escort  (@escorts) {
 unshift @escorts, { min_area => 1, slot_ids => [] }
    if !@escorts || $escorts[0]{min_area} > 1;
 
+{
+   my $slots = $form->{formation};
+   foreach my $slot (@$slots) {
+      $slot->{hero} = 0;
+   }
+   foreach my $id (@heroes) {
+      $slots->[$id]{hero}++;
+   }
+}
+
 if (@escorts == 1) {
    draw_simple();
 }
@@ -79,13 +89,8 @@ sub draw_simple {
 
    my $slots = $form->{formation};
    foreach my $slot (@$slots) {
-      $slot->{block} = $slot->{hero} = 0;
+      $slot->{block} = 0;
    }
-
-   foreach my $id (@heroes) {
-      $slots->[$id]{hero}++;
-   }
-
    foreach my $escort (@escorts) {
       foreach my $id (@{$escort->{slot_ids}}) {
          $slots->[$id]{block}++;
@@ -138,7 +143,10 @@ sub draw_progressive {
    foreach my $slot (@$slots) {
       my $x = int($slot->{x} * $scale + $xoff);
       my $y = int($slot->{y} * $scale + $yoff);
-      if ($slot->{wave}) {
+      if ($slot->{hero}) {
+         draw_box($ctx, $x, $y, $scale);
+      }
+      elsif ($slot->{wave}) {
          $ctx->set_source_rgb(1, 0, 0);
          $ctx->set_font_size(12);
          center_text($ctx, $x, $y, $slot->{wave});
