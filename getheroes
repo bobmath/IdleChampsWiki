@@ -115,6 +115,8 @@ my %effkey_ops = (
    heal_by_distance_from_source => 'heal',
    heal_most_damaged => 'heal',
    hero_dps_mult_by_upgrade_val => 'mulstack',
+   hero_dps_mult_reduced_by_source_distance_mult => 'mul',
+   hero_dps_mult_reduced_by_tag => 'mul',
    hero_dps_multiplier_from_temp_hp => 'mul',
    hero_dps_multiplier_reduced_by_age => 'mul',
    increase_attack_cooldown_distributed => 'time',
@@ -332,18 +334,23 @@ sub do_upgrade {
    }
 
    $upg->{_req} = '';
-   $upg->{name} =~ s/\{(.*?)\}#([0-9a-fA-F]{3})/{{Color|$2|$1}}/g;
+   $upg->{name} = colorize($upg->{name});
    $upg->{_unlock} = $upg->{name};
    $upg->{_effect}{_col} = $upg->{name} if $upg->{name};
 
    my $spec = $upg->{specialization_name};
    my $specpos;
    if ($spec) {
+      my $disp = colorize($spec);
+      $spec =~ s/\{(.*?)\}#([0-9a-fA-F]{3})/$1/g;
       $spec =~ s/\?//g;
+      $disp = "$spec|$disp" if $spec ne $disp;
       my $mile = $hero->{_milestones}[-1];
       $hero->{_abils} .= "'''<u>Specialization Choice – Level $level</u>'''\n\n"
          unless $mile->{_specs};
-      $hero->{_abils} .= ":'''{{Spec|size=32px|$spec}}'''\n\n";
+      if ($spec =~ /\}#/) {
+      }
+      $hero->{_abils} .= ":'''{{Spec|size=32px|$disp}}'''\n\n";
       $specpos = length($hero->{_abils});
       push @{$hero->{_specs}}, [] unless $mile->{_specs};
       push @{$hero->{_specs}[-1]}, $spec;
@@ -362,9 +369,9 @@ sub do_upgrade {
    do_effect($hero, $upg, $upg->{_effect});
 
    if ($specpos) {
-      my $desc = $upg->{specialization_description};
+      my $desc = colorize($upg->{specialization_description});
       my $eff = $upg->{_effect};
-      my $more = $eff->{_desc} ||= effect_string($hero, $eff);
+      my $more = colorize($eff->{_desc} ||= effect_string($hero, $eff));
       if ($more) {
          if ($desc) {
             $desc =~ s/(\w)\s*$/$1./;
@@ -377,7 +384,7 @@ sub do_upgrade {
 
    if (my $unlock = $upg->{_unlock}) {
       my $eff = $upg->{_effect};
-      my $desc = $eff->{_desc} ||= effect_string($hero, $eff);
+      my $desc = colorize($eff->{_desc} ||= effect_string($hero, $eff));
       do_unlock($hero, $upg, $unlock, 'Ability', $upg->{tip_text}, $desc);
    }
 }
@@ -599,7 +606,8 @@ sub do_buff_upgrade {
          $effdef = $effects->[0];
       }
       my $props = $effdef->{properties};
-      $index = 0 unless $props->{indexed_effect_properties};
+      $index = 0 unless $props->{indexed_effect_properties}
+         || $props->{per_effect_index_bonuses};
       $index //= $props->{default_bonus_index} // 0;
       $eff = $effdef->{effect_keys}[$index] or die;
    }
@@ -623,21 +631,29 @@ sub do_effect_def {
       my $effkeys = $effdef->{effect_keys};
       my $props = $effdef->{properties};
       my $index = $props->{default_bonus_index} // 0;
-      $effkeys->[$index]{_col} = $props->{effect_name} || $upg->{name}
+      $effkeys->[$index]{_col} =
+         colorize($props->{effect_name} || $upg->{name})
          if $index < @$effkeys;
       my $rules = $effdef->{requirements};
       $rules = $rules && @$rules;
 
       foreach my $effkey (@$effkeys) {
+         $count++;
+         $effkey->{_cond} = 1 if $rules;
+         do_effect($hero, $upg, $effkey);
          my $key = $effkey->{_key};
+         if ($key eq 'effect_def') {
+            my $subeffs = $effkey->{_effects};
+            my $subkeys = $subeffs->[0]{effect_keys};
+            if (@$subeffs == 1 && @$subkeys == 1) {
+               $effkey->{_col} = $subkeys->[0]{_col};
+            }
+         }
          $effkey->{_col} ||= $effkey_columns{$key} || $key;
          if ($seen{$effkey->{_col}}) {
             $effkey->{_col} .= ' ' . $count;
          }
          $seen{$effkey->{_col}} = 1;
-         $count++;
-         $effkey->{_cond} = 1 if $rules;
-         do_effect($hero, $upg, $effkey);
          do_bond($hero, $upg, $effkey) if $upg->{_bond};
       }
 
@@ -866,7 +882,6 @@ END
 
 print $OUT <<END;
 }}
-
 '''$char->{full_name}''' is one of the [[champions]] of [[Idle Champions of the Forgotten Realms]].
 
 ==Backstory==
@@ -1670,5 +1685,12 @@ sub commify {
    }
    push @parts, substr($num, 0, $pos);
    return join(',', reverse @parts) . $tail;
+}
+
+sub colorize {
+   my ($str) = @_;
+   return unless defined $str;
+   $str =~ s/\{(.*?)\}#([0-9a-fA-F]{3})/{{Color|$2|$1}}/g;
+   return $str;
 }
 
