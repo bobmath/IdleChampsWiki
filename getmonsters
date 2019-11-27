@@ -68,6 +68,12 @@ my @modifiers = qw(
          }
 
          if (my $props = $monst->{properties}) {
+            if (my $eff = $props->{effect_on_hit}) {
+               print $OUT "| effect = $eff->{effect_string}\n";
+            }
+            if (my $eff = $props->{effect_when_hit}) {
+               print $OUT "| effect = $eff when hit\n";
+            }
             my %props;
             foreach my $p (@properties) {
                $props{$p} = 1 if $props->{$p};
