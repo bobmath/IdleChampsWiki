@@ -640,18 +640,18 @@ sub do_effect_def {
       foreach my $effkey (@$effkeys) {
          $count++;
          $effkey->{_cond} = 1 if $rules;
-         do_effect($hero, $upg, $effkey);
          my $key = $effkey->{_key};
+         $effkey->{_col} ||= $effkey_columns{$key} || $key;
+         if ($seen{$effkey->{_col}}) {
+            $effkey->{_col} .= ' ' . $count;
+         }
+         do_effect($hero, $upg, $effkey);
          if ($key eq 'effect_def') {
             my $subeffs = $effkey->{_effects};
             my $subkeys = $subeffs->[0]{effect_keys};
             if (@$subeffs == 1 && @$subkeys == 1) {
                $effkey->{_col} = $subkeys->[0]{_col};
             }
-         }
-         $effkey->{_col} ||= $effkey_columns{$key} || $key;
-         if ($seen{$effkey->{_col}}) {
-            $effkey->{_col} .= ' ' . $count;
          }
          $seen{$effkey->{_col}} = 1;
          do_bond($hero, $upg, $effkey) if $upg->{_bond};
