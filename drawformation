@@ -47,6 +47,7 @@ print "Formation: ", ($form->{name} || '???'), "\n";
 print "Escorts:   ", scalar(@escorts), "\n";
 
 formation_bounds();
+draw_arrows();
 
 foreach my $escort  (@escorts) {
    $escort->{min_area} ||= 1;
@@ -271,6 +272,52 @@ sub formation_bounds {
    $form->{xmax} = $xmax;
    $form->{ymin} = $ymin;
    $form->{ymax} = $ymax;
+}
+
+sub draw_arrows {
+   my $pad = 8;
+   my $scale = 2;
+   my $xoff = $pad - $scale * $form->{xmin} + 0.5;
+   my $yoff = $pad - $scale * $form->{ymin} + 0.5;
+   my $wid = int($scale * ($form->{xmax} - $form->{xmin}) + 2*$pad + 0.5);
+   my $hgt = int($scale * ($form->{ymax} - $form->{ymin}) + 2*$pad + 0.5);
+   my $surface = Cairo::ImageSurface->create('argb32', $wid, $hgt);
+   my $ctx = Cairo::Context->create($surface);
+   $ctx->set_source_rgb(0, 0, 0);
+   $ctx->set_line_width(0.5);
+   $ctx->set_font_size(12);
+
+   foreach my $slot (@{$form->{formation}}) {
+      my $x = $scale * $slot->{x} + $xoff;
+      my $y = $scale * $slot->{y} + $yoff;
+      center_text($ctx, $x, $y, $slot->{col});
+      foreach my $adj (@{$slot->{adj}}) {
+         my $other = $form->{formation}[$adj] or die;
+         my $x2 = $scale * $other->{x} + $xoff;
+         my $y2 = $scale * $other->{y} + $yoff;
+         my $dx = $x2 - $x;
+         my $dy = $y2 - $y;
+         my $d = sqrt($dx*$dx + $dy*$dy);
+         my $f = 8 / $d;
+         my $fx = $dx * $f;
+         my $fy = $dy * $f;
+         $ctx->move_to($x + $fx, $y + $fy);
+         my $xe = $x2 - $fx;
+         my $ye = $y2 - $fy;
+         $ctx->line_to($xe, $ye);
+         $ctx->stroke();
+         $f = 4 / $d;
+         $fx = $dx * $f;
+         $fy = $dy * $f;
+         $ctx->move_to($xe - $fx + $fy, $ye - $fx - $fy);
+         $ctx->line_to($xe, $ye);
+         $ctx->line_to($xe - $fx - $fy, $ye + $fx - $fy);
+         $ctx->stroke();
+      }
+   }
+
+   print "Writing form_adj.png\n";
+   $surface->write_to_png('form_adj.png');
 }
 
 sub read_json {
