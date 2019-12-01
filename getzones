@@ -271,7 +271,7 @@ sub show_enemies {
       "[[#Beast|Beast]], [[#Construct|Construct]], [[#Fiend|Fiend]], ",
       "[[#Humanoid|Humanoid]], and [[#Undead|Undead]].\n\n";
    foreach my $type (sort keys %enemy_types) {
-      next if $type eq 'melee' || $type eq 'ranged';
+      next if $type eq 'melee';
       my $zones = $enemy_types{$type};
       @$zones = sort { $b->[2] <=> $a->[2] || $b->[3] <=> $a->[3]
          || $a->[0] cmp $b->[0] } @$zones;
