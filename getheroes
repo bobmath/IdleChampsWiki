@@ -49,11 +49,11 @@ my %groups = (
 );
 
 my %roles = (
-   dps => 'DPS',
-   tanking => 'Tanking',
-   healing => 'Healing',
-   support => 'Support',
-   gold => 'Gold',
+   dps     => '1DPS',
+   tanking => '2Tanking',
+   healing => '3Healing',
+   support => '4Support',
+   gold    => '5Gold',
 );
 
 my %rarity = (
@@ -840,11 +840,14 @@ sub show_header {
    my $stat = $char->{ability_scores} or die;
 
    my $group = '';
-   my $role = '';
+   my @roles;
    foreach my $tag (@{$hero->{tags}}) {
       if ($groups{$tag}) { $group = $groups{$tag} }
-      if ($roles{$tag}) { $role .= ' / ' if $role; $role .= $roles{$tag} }
+      if ($roles{$tag}) { push @roles, $roles{$tag} }
    }
+   @roles = map { substr($_,1) } sort @roles;
+   $hero->{_cats} = join "\n", map "[[Category:$_]]", 'Champions', @roles;
+   my $role = join ' / ', @roles;
 
 print $OUT <<END;
 {{Champion
@@ -1262,7 +1265,7 @@ sub show_trailer {
    print $OUT <<END;
 {{Navbox-Champions}}
 {{Navbox-IdleChampions}}
-[[Category:Champions]]
+$hero->{_cats}
 END
 
    my $char = $hero->{character_sheet_details};
