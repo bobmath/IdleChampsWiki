@@ -212,10 +212,10 @@ print $IDX <<END;
 ! data-sort-type="number"|{{Abbr|Cost|Initial cost of the champion}}
 ! class="unsortable"|Icon
 ! Name
-! data-sort-type="number"|{{Abbr|Damage|Base damage times level cap and Damage upgrades}}
 ! data-sort-type="number"|{{Abbr|DmgAll|Multiplied Bonus of all Damage All upgrades}}
 ! Race
 ! Class
+! Role
 ! {{Abbr|AL|Alignment}}
 ! data-sort-type="number"|{{Abbr|Str|Strength}}
 ! data-sort-type="number"|{{Abbr|Dex|Dexterity}}
@@ -846,7 +846,7 @@ sub show_header {
       if ($roles{$tag}) { push @roles, $roles{$tag} }
    }
    @roles = map { substr($_,1) } sort @roles;
-   $hero->{_cats} = join "\n", map "[[Category:$_]]", 'Champions', @roles;
+   $hero->{_roles} = \@roles;
    my $role = join ' / ', @roles;
 
 print $OUT <<END;
@@ -1262,19 +1262,20 @@ END
 
 sub show_trailer {
    my ($OUT, $hero) = @_;
-   print $OUT <<END;
-{{Navbox-Champions}}
-{{Navbox-IdleChampions}}
-$hero->{_cats}
-END
+   print $OUT "{{Navbox-Champions}}\n",
+      "{{Navbox-IdleChampions}}\n",
+      "[[Category:Champions]]\n";
+   foreach my $role (@{$hero->{_roles}}) {
+      print $OUT "[[Category:$role]]\n";
+   }
 
    my $char = $hero->{character_sheet_details};
    my $align = $char->{alignment};
    my $stat = $char->{ability_scores} or die;
    $align =~ s/[a-z ]//g;
-   my $dmg = calc_total($hero, 'Damage', '') || 0;
    my $dmgAll = calc_total($hero, 'Damage All', '') || '0%';
    my $base = sci( $hero->{base_cost} );
+   my $roles = join ', ', @{$hero->{_roles}};
 
 print $IDX <<END;
 |-
@@ -1282,10 +1283,10 @@ print $IDX <<END;
 | $base
 | {{Icon-Link|$hero->{name}|size=35px|notext=yes}}
 | [[$hero->{name}]]
-| $dmg
 | $dmgAll
 | $char->{race}
 | $char->{class}
+| $roles
 | $align
 | $stat->{str}
 | $stat->{dex}
