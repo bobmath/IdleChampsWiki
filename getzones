@@ -103,8 +103,10 @@ sub show_zones {
       close $OUT;
 
       open $OUT, '>:utf8', "zones/$filename" or die;
-      print $OUT "'''$adv->{name}''' is one of the [[adventures]] ",
-         "in the campaign [[$camp->{name}]].\n\n";
+      my $navtab = $navtabs{$adv->{campaign_id}};
+      print $OUT "'''$adv->{name}''' is one of the [[adventures]] in the ",
+         ($navtab ?  "campaign [[$camp->{name}]].\n\n"
+            : "[[$camp->{name}]] event.\n\n");
       show_advent($OUT, $adv);
 
       if (@$variants > 1) {
@@ -118,11 +120,17 @@ sub show_zones {
 
       show_waves($OUT, $adv, $set->{areas});
 
-      my $navtab = $navtabs{$adv->{campaign_id}} || 'events';
-      print $OUT "{{Navbox-Adventures|show=$navtab}}\n",
-         "{{Navbox-IdleChampions}}\n",
-         "[[Category:Adventures]]\n";
-      print $OUT "[[Category:$camp->{name}]]\n" unless $navtab eq 'events';
+      if ($navtab) {
+         print $OUT "{{Navbox-Adventures|show=$navtab}}\n",
+            "{{Navbox-IdleChampions}}\n",
+            "[[Category:Adventures]]\n",
+            "[[Category:$camp->{name}]]\n";
+      }
+      else {
+         print $OUT "{{Navbox-Adventures|show=events}}\n",
+            "{{Navbox-IdleChampions}}\n",
+            "[[Category:Event Adventures]]\n",
+      }
       close $OUT;
    }
 }
