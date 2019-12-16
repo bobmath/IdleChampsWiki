@@ -176,6 +176,8 @@ sub show_waves {
             add_monster_list($waves->[$i], \%monsters, $boss);
          }
       }
+
+      my %zonetags;
       if (my $props = $area->{properties}) {
          add_monster_hash($props->{static_monsters}, \%monsters);
          add_monster_gen($props->{monster_generators}, \%monsters, 0);
@@ -185,15 +187,20 @@ sub show_waves {
                push @desc, "'''Area $area->{area_id}''' – $desc\n\n";
             }
          }
+         if (my $weather = $props->{weather}) {
+            $weather = 'sun' if $weather eq 'bright_sun';
+            $weather = 'snow' if $weather eq 'snowing_only';
+            $zonetags{$weather}++;
+         }
       }
 
-      my $zonetags = '';
       my $bkg = $backgrounds->{$area->{background_id}};
       if (ref(my $props = $bkg->{properties}) eq 'HASH') {
          if (my $tags = $props->{area_tags}) {
-            $zonetags = join ' ', sort @$tags;
+            $zonetags{$_}++ foreach @$tags;
          }
       }
+      my $zonetags = join ' ', sort keys %zonetags;
 
       if (my $names = $monsters{'trash-names'}) {
          my $tags = $monsters{'trash-tags'} ||= {};
