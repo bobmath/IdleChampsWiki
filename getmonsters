@@ -50,6 +50,7 @@ my @modifiers = qw(
          if (my $grname = $graphics->{$monst->{graphic_id}}) {
             my $shortname = $grname;
             $shortname =~ s/^.*_(?=[[:alpha:]])//;
+            $shortname =~ s/([[:lower:]])_?([[:upper:]]|\d)/$1 $2/g;
             print $OUT "| name = \u$shortname\n";
             print $OUT "| imgname = $grname.png\n";
          }
