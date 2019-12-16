@@ -212,10 +212,10 @@ print $IDX <<END;
 ! data-sort-type="number"|{{Abbr|Cost|Initial cost of the champion}}
 ! class="unsortable"|Icon
 ! Name
-! data-sort-type="number"|{{Abbr|DmgAll|Multiplied Bonus of all Damage All upgrades}}
 ! Race
 ! Class
 ! Role
+! data-sort-type="number"|{{Abbr|DmgAll|Multiplied Bonus of all Damage All upgrades}}
 ! {{Abbr|AL|Alignment}}
 ! data-sort-type="number"|{{Abbr|Str|Strength}}
 ! data-sort-type="number"|{{Abbr|Dex|Dexterity}}
@@ -264,7 +264,7 @@ sub do_hero {
    do_bonus($hero, {_xlvl=>1}, 'Damage', 'base', $hero->{base_damage});
    do_bonus($hero, {}, 'Damage All', 'base', undef);
    do_bonus($hero, {}, 'Health', 'base', $hero->{base_health});
-   do_base_attack($hero, {}, $hero->{base_attack_id});
+   do_base_attack($hero, {}, $hero, $hero->{base_attack_id});
 
    if (my $upgrades = $hero_upgrades->{$id}) {
       @$upgrades = sort { $a->{required_level} <=> $b->{required_level}
@@ -451,7 +451,7 @@ sub do_effect {
       do_bonus($hero, $upg, $hero->{_ult}{$upg->{_req}}, 'mul', $amt);
    }
    elsif ($key eq 'change_base_attack') {
-      do_base_attack($hero, $upg, $params->{attack_id});
+      do_base_attack($hero, $upg, $eff, $params->{attack_id});
    }
    elsif ($key eq 'change_upgrade_base_amount') {
       my $targ = $upgrades->{$params->{id}} or die;
@@ -487,11 +487,11 @@ sub do_effect {
       push @{$hero->{_overwhelm}}, $hero->{_overwhelm}[0] + $amt;
    }
    elsif ($key eq 'set_ultimate_attack') {
-      do_ultimate($hero, $upg, $params->{attack_id});
+      do_ultimate($hero, $upg, $eff, $params->{attack_id});
    }
    elsif ($key eq 'wolfnut') {
       do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, '');
-      do_base_attack($hero, $upg, $params->{attack_id});
+      do_base_attack($hero, $upg, $eff, $params->{attack_id});
    }
 }
 
@@ -543,8 +543,8 @@ sub do_mirror {
 }
 
 sub do_ultimate {
-   my ($hero, $upg, $id) = @_;
-   my $att = $attacks->{$id} or die;
+   my ($hero, $upg, $eff, $id) = @_;
+   $upg->{_attack} = my $att = $attacks->{$id} or die;
    $upg->{_unlock} = '';
    $hero->{_ult}{$upg->{_req}} = $att->{name};
    $upg->{_bud} = $att->{damage_modifier} * $att->{cooldown};
@@ -556,7 +556,7 @@ sub do_ultimate {
    $upg->{_unlock} = '';
    foreach my $anim (@{$att->{animations}}) {
       if (my $id = $anim->{attack_id}) {
-         do_base_attack($hero, $upg, $id);
+         do_base_attack($hero, $upg, $eff, $id);
       }
       if (my $bonus = $anim->{bonus_damage_from}) {
          # Aila Storm Herald
@@ -755,7 +755,7 @@ sub do_bonus {
 }
 
 sub do_base_attack {
-   my ($hero, $upg, $att_id) = @_;
+   my ($hero, $upg, $eff, $att_id) = @_;
    my @ids = ( $att_id );
    my $seen = $hero->{_seen_attacks} ||= { };
    while (@ids) {
@@ -763,6 +763,7 @@ sub do_base_attack {
       next if $seen->{$att_id};
       $seen->{$att_id} = 1;
       my $att = $attacks->{$att_id} or die;
+      push @{$eff->{_attacks}}, $att;
       if ($att_id == 39) { # kludge for hitch's thrown dagger
          do_bonus($hero, $upg, "$att->{name} Targets", 'add',
             $att->{num_targets});
@@ -1283,10 +1284,10 @@ print $IDX <<END;
 | $base
 | {{Icon-Link|$hero->{name}|size=35px|notext=yes}}
 | [[$hero->{name}]]
-| $dmgAll
 | $char->{race}
 | $char->{class}
 | $roles
+| $dmgAll
 | $align
 | $stat->{str}
 | $stat->{dex}
