@@ -360,8 +360,9 @@ sub do_upgrade {
       $upg->{_bond} = 1 if $spec =~ /^Bond:/;
    }
 
-   if (my $rid = $upg->{required_upgrade_id}) {
-      my $req = $upgrades->{$rid} or die;
+   my $rid = $upg->{required_upgrade_id};
+   if ($rid && $rid < 9999) {
+      my $req = $upgrades->{$rid} or die $rid;
       $upg->{_req} = $req->{specialization_name} || $req->{name};
       $upg->{_req} =~ s/\?//g;
    }
@@ -391,7 +392,7 @@ sub do_upgrade {
 
 sub do_effect {
    my ($hero, $upg, $eff) = @_;
-   my $key = $eff->{_key} or die;
+   my $key = $eff->{_key} or return;
    my $params = $eff->{_params};
    my $amt = $params->{amount};
    $eff->{_cond} = 1 if $eff->{targets};
@@ -914,12 +915,13 @@ sub show_bond {
    for my $slot (1 .. 12) {
       my $style = $slot == 6 ? ' style="background-color:#333"' : '';
       print $OUT "|- align=center$style\n| $slot\n";
-      for my $col (@cols) {
-         if (my $names = $bond->{$col}{$slot}) {
-            print $OUT "| ", join('<br>', map { "[[$_]]" } @$names), "\n";
+      for my $i (0 .. $#cols) {
+         my $style = $i < $#cols ? '' : ' style="background-color:#333" |';
+         if (my $names = $bond->{$cols[$i]}{$slot}) {
+            print $OUT "|$style ", join('<br>', map { "[[$_]]" } @$names), "\n";
          }
          else {
-            print $OUT "|\n";
+            print $OUT "|$style\n";
          }
       }
    }
