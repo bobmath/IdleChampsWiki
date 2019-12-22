@@ -195,7 +195,7 @@ sub show_attacks {
 
 sub load_other {
    my ($name) = @_;
-   open my $IN, '<:utf8', 'define.json' or die;
+   open my $IN, '<:utf8', 'defines/defines.json' or die;
    local $/ = undef;
    my $defines = $json->decode(<$IN>);
    close $IN;

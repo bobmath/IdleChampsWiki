@@ -751,7 +751,7 @@ sub load_defines {
 }
 
 sub load_heroes {
-   open my $IN, '<:utf8', 'define.json' or die;
+   open my $IN, '<:utf8', 'defines/defines.json' or die;
    local $/ = undef;
    my $data = $json->decode(<$IN>);
    close $IN;

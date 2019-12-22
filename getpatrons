@@ -9,7 +9,7 @@ my $json = JSON->new();
 #$json->boolean_values(0, 1);
 $json->indent(1);
 $json->canonical(1);
-open my $IN, '<', 'define.json' or die;
+open my $IN, '<', 'defines/defines.json' or die;
 local $/ = undef;
 my $defines = $json->decode(<$IN>);
 close $IN;
