@@ -9,7 +9,7 @@ my $json = JSON->new();
 #$json->boolean_values(0, 1);
 $json->indent(1);
 $json->canonical(1);
-open my $IN, '<', 'define.json' or die;
+open my $IN, '<', 'defines/defines.json' or die;
 local $/ = undef;
 my $defines = $json->decode(<$IN>);
 close $IN;
@@ -212,11 +212,12 @@ print $IDX <<END;
 ! data-sort-type="number"|{{Abbr|Cost|Initial cost of the champion}}
 ! class="unsortable"|Icon
 ! Name
+! Age
+! {{Abbr|AL|Alignment}}
 ! Race
 ! Class
 ! Role
-! data-sort-type="number"|{{Abbr|DmgAll|Multiplied Bonus of all Damage All upgrades}}
-! {{Abbr|AL|Alignment}}
+! data-sort-type="number"|{{Abbr|CD|Base attack cooldown}}
 ! data-sort-type="number"|{{Abbr|Str|Strength}}
 ! data-sort-type="number"|{{Abbr|Dex|Dexterity}}
 ! data-sort-type="number"|{{Abbr|Con|Constitution}}
@@ -1273,12 +1274,13 @@ sub show_trailer {
    }
 
    my $char = $hero->{character_sheet_details};
+   my $age = int $char->{age};
    my $align = $char->{alignment};
    my $stat = $char->{ability_scores} or die;
-   $align =~ s/[a-z ]//g;
-   my $dmgAll = calc_total($hero, 'Damage All', '') || '0%';
+   $align =~ s/[^A-Z]//g;
    my $base = sci( $hero->{base_cost} );
    my $roles = join ', ', @{$hero->{_roles}};
+   my $att = $attacks->{$hero->{base_attack_id}} or die;
 
 print $IDX <<END;
 |-
@@ -1286,11 +1288,12 @@ print $IDX <<END;
 | $base
 | {{Icon-Link|$hero->{name}|size=35px|notext=yes}}
 | [[$hero->{name}]]
+| $age
+| $align
 | $char->{race}
 | $char->{class}
 | $roles
-| $dmgAll
-| $align
+| $att->{cooldown}
 | $stat->{str}
 | $stat->{dex}
 | $stat->{con}
