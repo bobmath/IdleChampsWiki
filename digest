@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+# Read a .har file, extract game data, delete input file when done
+import base64
+import datetime
+import json
+import os
+import re
+import sys
+import urllib.parse
+
+def load_json(path):
+   data = {}
+   try:
+      f = open(path, 'r')
+      try:
+         data = json.load(f)
+      finally: f.close()
+   except FileNotFoundError: pass
+   except json.JSONDecodeError: pass
+   return data
+
+def save_json(path, data, when):
+   f = open(path, 'w')
+   try:
+      json.dump(data, f, sort_keys=True, indent=2)
+   finally: f.close()
+   if when: os.utime(path, times=(when, when))
+
+def copy_keys(old, data):
+   for key in old.keys():
+      if key.startswith('_') and key not in data:
+         data[key] = old[key]
+
+def extract_favor(id, data, when):
+   favor = {}
+   for key in ('first_currency', 'currency_growth_rate', 'gold_growth_rate'):
+      if key in data: favor[key] = data[key]
+   if not favor: return
+   path = 'defines/adventure_defines/' + str(id)
+   adv = load_json(path)
+   if '_favor' in adv and adv['_favor'].get('_time', 0) > when: return
+   favor['_time'] = when
+   adv['_favor'] = favor
+   os.makedirs('defines/adventure_defines', exist_ok=True)
+   save_json(path, adv, when)
+
+def extract_event(details, when):
+   if not details: return
+   os.makedirs('defines/event_details', exist_ok=True)
+   for event in details:
+      id = event.get('event_id', 0)
+      if id <= 0: continue
+      path = 'defines/event_details/' + str(id)
+      old = load_json(path)
+      if old.get('_time', 0) > when: continue
+      event.pop('completed_adventure_ids', None)
+      event.pop('reset_currency', None)
+      event.pop('user_data', None)
+      event['_time'] = when
+      copy_keys(old, event)
+      save_json(path, event, when)
+
+def extract_details(details, when):
+   os.makedirs('defines', exist_ok=True)
+   save_json('defines/details.json', details, when)
+   adv_id = details.get('current_adventure_id', 0)
+   if adv_id > 0 and 'adventure_data' in details:
+      extract_favor(adv_id, details['adventure_data'], when)
+   if 'event_details' in details:
+      extract_event(details['event_details'], when)
+
+def merge_patrons(old_adv, new_adv, when):
+   new_rewards = new_adv.get('patron_rewards', None)
+   if type(new_rewards) != dict:
+      new_rewards = {}
+      new_adv['patron_rewards'] = new_rewards
+   for new_vars in new_rewards.values():
+      for new_stuff in new_vars.values():
+         for new_item in new_stuff:
+            new_item.setdefault('_time', when)
+   old_rewards = old_adv.get('patron_rewards', None)
+   if type(old_rewards) != dict: return
+   for pat_id in old_rewards:
+      old_vars = old_rewards[pat_id]
+      new_vars = new_rewards.get(pat_id, None)
+      if type(new_vars) != dict:
+         new_vars = {}
+         new_rewards[pat_id] = new_vars
+      for var_id in old_vars:
+         if not new_vars.get(var_id, None):
+            new_vars[var_id] = old_vars[var_id]
+
+id_fields = {
+   'distraction_defines' : 'distraction_id',
+}
+
+def extract_json(text, when):
+   if not len(text): return
+   data = json.loads(text)
+   if 'details' in data: extract_details(data['details'], when)
+   defines = data.get('defines', None)
+   if type(defines) != dict: return
+   for key in sorted(defines.keys()):
+      field = id_fields.get(key, 'id')
+      records = defines[key]
+      if not records: continue
+      os.makedirs('defines/' + key, exist_ok=True)
+      for rec in records:
+         id = rec.get(field, 0)
+         if id <= 0: continue
+         path = 'defines/' + key + '/' + str(id)
+         old = load_json(path)
+         if old.get('_time', 0) > when: continue
+         rec['_time'] = when
+         copy_keys(old, rec)
+         if key == 'adventure_defines': merge_patrons(old, rec, when)
+         save_json(path, rec, when)
+
+def save_file(path, text, when):
+   old_size = 0
+   new_size = len(text)
+   try:
+      stat = os.stat(path)
+      if stat.st_mtime > when: return
+      old_size = stat.st_size
+      if old_size == new_size:
+         f = open(path, 'rb')
+         oldtext = f.read()
+         f.close()
+         if oldtext == text: return
+   except FileNotFoundError:
+      pos = path.rfind('/')
+      if pos > 0: os.makedirs(path[:pos], exist_ok=True)
+   if old_size == 0:
+      print(path)
+   elif old_size == new_size:
+      print(path, ' changed')
+   else:
+      print(path, ' size:', old_size, '=>', new_size)
+   f = open(path, 'wb')
+   f.write(text)
+   f.close()
+   if when: os.utime(path, times=(when, when))
+
+def scrub_path(str):
+   str = re.sub(r'[^-./\w]+', '_', str)
+   path = []
+   for part in str.split('/'):
+      if part == '' or part == '.':
+         pass
+      elif part == '..':
+         if path: path.pop()
+      elif part.startswith('.'):
+         path.append('_' + part[1:])
+      else:
+         path.append(part)
+   return '/'.join(path)
+
+def read_har(file):
+   print('Reading', file)
+   infile = open(file, 'rb')
+   # JSONDecoder bogusly assumes binary data is utf8, so kludge it to latin1
+   data = str(infile.read(), 'latin1')
+   infile.close()
+   data = json.loads(data)
+   for entry in data['log']['entries']:
+      url = urllib.parse.urlparse( entry['request']['url'] )
+      if not url.netloc.endswith('.idlechampions.com'): continue
+      if not url.path.startswith('/~idledragons/'): continue
+      path = scrub_path(urllib.parse.unquote(url.path[14:]))
+      if path == '': continue
+      data = entry['response']['content']
+      if data.get('encoding', '') == 'base64':
+         text = base64.b64decode(data['text'])
+      else:
+         text = bytes(data['text'], 'latin1') # kludge it back to binary
+      size = data.get('size', 0)
+      assert(size == 0 or size == len(text))
+      when = int( datetime.datetime.strptime(entry['startedDateTime'],
+         '%Y-%m-%dT%H:%M:%S.%f%z').timestamp() )
+      if path == 'post.php':
+         if url.query.startswith('call=getDefinitions'):
+            save_file('defines/defines.json', text, when)
+         else:
+            extract_json(text, when)
+      else:
+         save_file('data/' + path, text, when)
+   os.remove(file)
+
+if len(sys.argv) < 2: print('usage:', sys.argv[0], 'filenames...')
+for arg in sys.argv[1:]: read_har(arg)
+
