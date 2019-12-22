@@ -176,8 +176,8 @@ def read_har(file):
          text = bytes(data['text'], 'latin1') # kludge it back to binary
       size = data.get('size', 0)
       assert(size == 0 or size == len(text))
-      when = int( datetime.datetime.strptime(entry['startedDateTime'],
-         '%Y-%m-%dT%H:%M:%S.%f%z').timestamp() )
+      when = datetime.datetime.fromisoformat(entry['startedDateTime'])
+      when = int(when.timestamp())
       if path == 'post.php':
          if url.query.startswith('call=getDefinitions'):
             save_file('defines/defines.json', text, when)
