@@ -143,7 +143,7 @@ def save_file(path, text, when):
    if when: os.utime(path, times=(when, when))
 
 def scrub_path(str):
-   str = re.sub(r'[^-./\w]+', '_', str)
+   str = re.sub(r'[^-./\w()]+', '_', str)
    path = []
    for part in str.split('/'):
       if part == '' or part == '.':
