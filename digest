@@ -11,19 +11,15 @@ import urllib.parse
 def load_json(path):
    data = {}
    try:
-      f = open(path, 'r')
-      try:
+      with open(path, 'r') as f:
          data = json.load(f)
-      finally: f.close()
    except FileNotFoundError: pass
    except json.JSONDecodeError: pass
    return data
 
 def save_json(path, data, when):
-   f = open(path, 'w')
-   try:
+   with open(path, 'w') as f:
       json.dump(data, f, sort_keys=True, indent=2)
-   finally: f.close()
    if when: os.utime(path, times=(when, when))
 
 def copy_keys(old, data):
