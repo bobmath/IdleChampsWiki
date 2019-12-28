@@ -179,7 +179,9 @@ sub show_waves {
          add_monster_info($by_area[0], \%monsters, 0);
       }
       add_monster_list($area->{monsters}, \%monsters);
+      my $wave_based;
       if (my $waves = $area->{waves}) {
+         $wave_based = 1;
          foreach my $i (0 .. $#$waves) {
             my $boss = $i >= 2 ? 1 : undef;
             add_monster_list($waves->[$i], \%monsters, $boss);
@@ -209,12 +211,17 @@ sub show_waves {
             $zonetags{$_}++ foreach @$tags;
          }
       }
-      my $zonetags = join ' ', sort keys %zonetags;
+      my $zonetags = join(' ', sort keys %zonetags) || 'indoors';
 
       if (my $names = $monsters{'trash-names'}) {
          my $tags = $monsters{'trash-tags'} ||= {};
-         push @tbl, [ $area->{area_id}, $zonetags,
-            join(', ', map "[[$_]]", sort keys %$names),
+         my @names = sort keys %$names;
+         foreach my $name (@names) {
+            my $count = $names->{$name};
+            $name = "[[$name]]";
+            $name .= " ×$count" if $wave_based;
+         }
+         push @tbl, [ $area->{area_id}, $zonetags, join(', ', @names),
             show_tags($tags) ];
          $trash_totals{$_}++ foreach keys %$tags;
       }
