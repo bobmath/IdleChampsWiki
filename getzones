@@ -64,7 +64,7 @@ my $backgrounds = load_defines('background_defines');
 my $advents = load_defines('adventure_defines');
 my $dialogue = load_defines('cinematics_defines');
 my $quests = load_defines('quest_defines');
-my %enemy_types;
+my (%enemy_types, %static_monsters);
 
 mkdir 'zones';
 mkdir 'rawzones';
@@ -176,7 +176,7 @@ sub show_waves {
          shift @by_area;
       }
       if (@by_area && $by_area[0]{min_area} <= $area->{area_id}) {
-         add_monster_info($by_area[0], \%monsters, 0);
+         add_monster_info($by_area[0], \%monsters, boss=>0);
       }
       add_monster_list($area->{monsters}, \%monsters);
       my $wave_based;
@@ -184,14 +184,14 @@ sub show_waves {
          $wave_based = 1;
          foreach my $i (0 .. $#$waves) {
             my $boss = $i >= 2 ? 1 : undef;
-            add_monster_list($waves->[$i], \%monsters, $boss);
+            add_monster_list($waves->[$i], \%monsters, boss=>$boss);
          }
       }
 
       my %zonetags;
       if (my $props = $area->{properties}) {
-         add_monster_hash($props->{static_monsters}, \%monsters);
-         add_monster_gen($props->{monster_generators}, \%monsters, 0);
+         add_monster_hash($props->{static_monsters}, \%monsters, static=>1);
+         add_monster_gen($props->{monster_generators}, \%monsters, boss=>0);
          if (my $help = $props->{helper_display}) {
             if (my $desc = $help->{description}) {
                $desc =~ s/\|/\n\n/g;
@@ -309,61 +309,65 @@ sub show_enemies {
    }
    print $OUT "[[Category:Bestiary| ]]\n";
    close $OUT;
+
+   open $OUT, '>', "defines/monster_defines/static" or die;
+   print $OUT $_, "\n" foreach sort { $a <=> $b } keys %static_monsters;
+   close $OUT;
 }
 
 sub add_monster_list {
-   my ($list, $monst_info, $boss) = @_;
+   my ($list, $monst_info, %opts) = @_;
    return unless $list;
    foreach my $id (@$list) {
-      add_monster($id, $monst_info, $boss);
+      add_monster($id, $monst_info, %opts);
    }
 }
 
 sub add_monster_hash {
-   my ($hash, $monst_info, $boss) = @_;
+   my ($hash, $monst_info, %opts) = @_;
    return unless $hash;
    foreach my $key (sort keys %$hash) {
-      add_monster_info($hash->{$key}, $monst_info, $boss);
+      add_monster_info($hash->{$key}, $monst_info, %opts);
    }
 }
 
 sub add_monster_gen {
-   my ($generators, $monst_info, $boss) = @_;
+   my ($generators, $monst_info, %opts) = @_;
    return unless $generators;
    foreach my $key (sort keys %$generators) {
       my $gen = $generators->{$key};
-      add_monster_info($gen, $monst_info, $boss);
-      add_monster_info($gen->{first_wave}, $monst_info, $boss);
+      add_monster_info($gen, $monst_info, %opts);
+      add_monster_info($gen->{first_wave}, $monst_info, %opts);
       if (my $opts = $gen->{options}) {
          foreach my $opt (@$opts) {
-            add_monster_info($opt, $monst_info, $boss);
+            add_monster_info($opt, $monst_info, %opts);
          }
       }
    }
 }
 
 sub add_monster_info {
-   my ($info, $monst_info, $boss) = @_;
+   my ($info, $monst_info, %opts) = @_;
    return unless $info;
-   $boss //= $info->{boss};
+   $opts{boss} //= $info->{boss};
    if (my $id = $info->{monster_id}) {
-      add_monster($id, $monst_info, $boss);
+      add_monster($id, $monst_info, %opts);
    }
    if (my $ids = $info->{monster_ids}) {
       foreach my $id (@$ids) {
-         add_monster($id, $monst_info, $boss);
+         add_monster($id, $monst_info, %opts);
       }
    }
 }
 
 sub add_monster {
-   my ($id, $monst_info, $boss) = @_;
+   my ($id, $monst_info, %opts) = @_;
    return unless $id;
    my $monst = $monsters->{$id} or die;
    my %tags;
    $tags{$_} = 1 foreach @{$monst->{tags}};
    return if $tags{non_monster};
-   my $type = $boss // $tags{boss} ? 'boss' : 'trash';
+   my $type = $opts{boss} // $tags{boss} ? 'boss' : 'trash';
    $tags{'hit-based'} = 1 if delete $tags{hits_based};
    $tags{'armor-based'} = 1 if delete $tags{armor_based};
    my $name = $monst->{_name} // $monst->{name};
@@ -371,6 +375,7 @@ sub add_monster {
    $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
    $tags->{$_}++ foreach keys %tags;
+   $static_monsters{$id}++ if $opts{static};
 
    if (my $props = $monst->{properties}) {
       $tags->{'armor-based'}++ if $props->{armor_based_damage};
@@ -386,17 +391,17 @@ sub add_monster {
 
       if (my $spawn = $props->{spawns_monster_ids}) {
          foreach my $id (@$spawn) {
-            add_monster($id, $monst_info, $boss);
+            add_monster($id, $monst_info, %opts);
          }
       }
 
       if (my $spawn = $props->{spawns_monster_on_death}) {
          if (my $id = $spawn->{monster_id}) {
-            add_monster($id, $monst_info, $boss);
+            add_monster($id, $monst_info, %opts);
          }
          if (my $ids = $spawn->{monster_ids}) {
             foreach my $id (@$ids) {
-               add_monster($id, $monst_info, $boss);
+               add_monster($id, $monst_info, %opts);
             }
          }
       } # spawn on death

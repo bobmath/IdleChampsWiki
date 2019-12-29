@@ -10,6 +10,7 @@ $json->indent(1);
 $json->canonical(1);
 
 my $monsters = load_defines('monster_defines');
+my $static_monsters = load_static();
 my ($attacks, $graphics) = load_other();
 
 my @properties = qw(
@@ -79,7 +80,9 @@ my @modifiers = qw(
             foreach my $p (@properties) {
                $props{$p} = 1 if $props->{$p};
             }
-            $props{stun_immune} = 1 unless $props->{allow_stun} // 1;
+            my $static = $static_monsters->{ $monst->{id} };
+            $props{stun_immune} = 1 unless !$monst->{attack_id}
+               || $props->{allow_stun} // !$static;
             $props{impassable} = 1 unless $props->{passable} // 1;
             if (my $ranges = $props->{first_health_ranges}) {
                foreach my $range (@$ranges) {
@@ -191,6 +194,18 @@ sub show_attacks {
             $anim->{update_base_attack_after};
       }
    }
+}
+
+sub load_static {
+   my $static = {};
+   open my $F, '<', 'defines/monster_defines/static' or return;
+   local $_;
+   while (<$F>) {
+      s/\s+//g;
+      $static->{$_} = 1;
+   }
+   close $F;
+   return $static;
 }
 
 sub load_other {
