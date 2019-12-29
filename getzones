@@ -372,9 +372,6 @@ sub add_monster {
    my $tags = $monst_info->{"$type-tags"} ||= {};
    $tags->{$_}++ foreach keys %tags;
 
-   return if $monst_info->{ids}{$id};
-   $monst_info->{ids}{$id} = 1;
-
    if (my $props = $monst->{properties}) {
       $tags->{'armor-based'}++ if $props->{armor_based_damage};
       $tags->{'hit-based'}++ if $props->{hits_based_damage};
