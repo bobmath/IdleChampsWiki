@@ -315,9 +315,13 @@ sub show_enemies {
    while (my ($id, $stats) = each %static_monsters) {
       my (@stats, $diff);
       foreach my $dat (sort keys %$stats) {
-         if ($dat) { $diff++ }
-         else { $dat = '{}' }
-         push @stats, $json->decode($dat);
+         if ($dat) {
+            $diff++;
+            push @stats, $json->decode($dat);
+         }
+         else {
+            push @stats, {};
+         }
       }
       $stats{$id} = \@stats if $diff;
    }
@@ -346,7 +350,7 @@ sub add_monster_hash {
          delete $info->{y};
          delete $info->{sort_offset_y};
          delete $info->{boss}; # doesn't seem to matter
-         $info->{properties}{stun_immune} = 1 unless $info->{allow_stun} // 0;
+         $info->{allow_stun} //= 0;
          if (my $props = $info->{properties}) {
             delete $props->{health_bar_offset_x};
             delete $props->{health_bar_offset_y};

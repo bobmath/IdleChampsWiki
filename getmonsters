@@ -55,6 +55,9 @@ my @modifiers = qw(
                   $monst->{properties}{$k} = $v;
                }
             }
+            if (defined(my $stun = delete $stat->{allow_stun})) {
+               $monst->{properties}{allow_stun} = $stun;
+            }
             while (my ($k, $v) = each %$stat) {
                $monst->{$k} = $v;
             }
