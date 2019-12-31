@@ -10,7 +10,7 @@ $json->indent(1);
 $json->canonical(1);
 
 my $monsters = load_defines('monster_defines');
-my $static_monsters = load_static();
+my $static_monsters = load_json('defines/monster_defines/static') || {};
 my ($attacks, $graphics) = load_other();
 
 my @properties = qw(
@@ -47,6 +47,18 @@ my @modifiers = qw(
       print $OUT qq[<ul class="hlist">\n];
 
       foreach my $monst (@{$monst_names{$name}}) {
+         if (my $static = $static_monsters->{$monst->{id}}) {
+            die 'too many' if @$static > 1;
+            my $stat = $static->[0];
+            if (my $props = delete $stat->{properties}) {
+               while (my ($k, $v) = each %$props) {
+                  $monst->{properties}{$k} = $v;
+               }
+            }
+            while (my ($k, $v) = each %$stat) {
+               $monst->{$k} = $v;
+            }
+         }
          print $OUT "<li>\n{{Monster\n| monster_id = $monst->{id}\n";
          if (my $grname = $graphics->{$monst->{graphic_id}}) {
             my $shortname = $grname;
@@ -71,7 +83,8 @@ my @modifiers = qw(
 
          if (my $props = $monst->{properties}) {
             if (my $eff = $props->{effect_on_hit}) {
-               print $OUT "| effect = $eff->{effect_string}\n";
+               $eff = $eff->{effect_string} if ref $eff;
+               print $OUT "| effect = $eff\n";
             }
             if (my $eff = $props->{effect_when_hit}) {
                print $OUT "| effect = $eff when hit\n";
@@ -80,9 +93,7 @@ my @modifiers = qw(
             foreach my $p (@properties) {
                $props{$p} = 1 if $props->{$p};
             }
-            my $static = $static_monsters->{ $monst->{id} };
-            $props{stun_immune} = 1 unless !$monst->{attack_id}
-               || $props->{allow_stun} // !$static;
+            $props{stun_immune} = 1 unless $props->{allow_stun} // 1;
             $props{impassable} = 1 unless $props->{passable} // 1;
             if (my $ranges = $props->{first_health_ranges}) {
                foreach my $range (@$ranges) {
@@ -196,16 +207,13 @@ sub show_attacks {
    }
 }
 
-sub load_static {
-   my $static = {};
-   open my $F, '<', 'defines/monster_defines/static' or return;
-   local $_;
-   while (<$F>) {
-      s/\s+//g;
-      $static->{$_} = 1;
-   }
-   close $F;
-   return $static;
+sub load_json {
+   my ($file) = @_;
+   open my $IN, '<:utf8', $file or return;
+   local $/ = undef;
+   my $data = $json->decode(<$IN>);
+   close $IN;
+   return $data;
 }
 
 sub load_other {

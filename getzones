@@ -3,6 +3,7 @@ use utf8;
 use strict;
 use warnings;
 use JSON ();
+use Storable qw( dclone );
 
 my $json = JSON->new();
 #$json->boolean_values(0, 1);
@@ -310,8 +311,14 @@ sub show_enemies {
    print $OUT "[[Category:Bestiary| ]]\n";
    close $OUT;
 
-   open $OUT, '>', "defines/monster_defines/static" or die;
-   print $OUT $_, "\n" foreach sort { $a <=> $b } keys %static_monsters;
+   my %stats;
+   while (my ($id, $stats) = each %static_monsters) {
+      foreach my $dat (sort keys %$stats) {
+         push @{$stats{$id}}, $json->decode($dat);
+      }
+   }
+   open $OUT, '>', 'defines/monster_defines/static' or die;
+   print $OUT $json->encode(\%stats);
    close $OUT;
 }
 
@@ -327,6 +334,21 @@ sub add_monster_hash {
    my ($hash, $monst_info, %opts) = @_;
    return unless $hash;
    foreach my $key (sort keys %$hash) {
+      if ($opts{static}) {
+         my $info = dclone($hash->{$key});
+         my $id = delete $info->{monster_id} or die;
+         delete $info->{x};
+         delete $info->{y};
+         delete $info->{sort_offset_y};
+         delete $info->{boss}; # doesn't seem to matter
+         $info->{properties}{stun_immune} = 1 unless $info->{allow_stun} // 0;
+         if (my $props = $info->{properties}) {
+            delete $props->{health_bar_offset_x};
+            delete $props->{health_bar_offset_y};
+            delete $info->{properties} unless %$props;
+         }
+         $static_monsters{$id}{$json->encode($info)}++;
+      }
       add_monster_info($hash->{$key}, $monst_info, %opts);
    }
 }
@@ -375,7 +397,6 @@ sub add_monster {
    $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
    $tags->{$_}++ foreach keys %tags;
-   $static_monsters{$id}++ if $opts{static};
 
    if (my $props = $monst->{properties}) {
       $tags->{'armor-based'}++ if $props->{armor_based_damage};
