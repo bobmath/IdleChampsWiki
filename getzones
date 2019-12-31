@@ -313,9 +313,13 @@ sub show_enemies {
 
    my %stats;
    while (my ($id, $stats) = each %static_monsters) {
+      my (@stats, $diff);
       foreach my $dat (sort keys %$stats) {
-         push @{$stats{$id}}, $json->decode($dat);
+         if ($dat) { $diff++ }
+         else { $dat = '{}' }
+         push @stats, $json->decode($dat);
       }
+      $stats{$id} = \@stats if $diff;
    }
    open $OUT, '>', 'defines/monster_defines/static' or die;
    print $OUT $json->encode(\%stats);
@@ -334,6 +338,7 @@ sub add_monster_hash {
    my ($hash, $monst_info, %opts) = @_;
    return unless $hash;
    foreach my $key (sort keys %$hash) {
+      my $static;
       if ($opts{static}) {
          my $info = dclone($hash->{$key});
          my $id = delete $info->{monster_id} or die;
@@ -347,9 +352,9 @@ sub add_monster_hash {
             delete $props->{health_bar_offset_y};
             delete $info->{properties} unless %$props;
          }
-         $static_monsters{$id}{$json->encode($info)}++;
+         $static = $json->encode($info);
       }
-      add_monster_info($hash->{$key}, $monst_info, %opts);
+      add_monster_info($hash->{$key}, $monst_info, %opts, static=>$static);
    }
 }
 
@@ -397,6 +402,7 @@ sub add_monster {
    $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
    $tags->{$_}++ foreach keys %tags;
+   $static_monsters{$id}{delete($opts{static}) // ''}++;
 
    if (my $props = $monst->{properties}) {
       $tags->{'armor-based'}++ if $props->{armor_based_damage};
