@@ -350,12 +350,10 @@ sub add_monster_hash {
          delete $info->{y};
          delete $info->{sort_offset_y};
          delete $info->{boss}; # doesn't seem to matter
-         $info->{allow_stun} //= 0;
-         if (my $props = $info->{properties}) {
-            delete $props->{health_bar_offset_x};
-            delete $props->{health_bar_offset_y};
-            delete $info->{properties} unless %$props;
-         }
+         my $props = $info->{properties} ||= {};
+         $props->{allow_stun} = delete($info->{allow_stun}) // 0;
+         delete $props->{health_bar_offset_x};
+         delete $props->{health_bar_offset_y};
          $static = $json->encode($info);
       }
       add_monster_info($hash->{$key}, $monst_info, %opts, static=>$static);

@@ -50,16 +50,16 @@ my @modifiers = qw(
          if (my $static = $static_monsters->{$monst->{id}}) {
             die 'too many' if @$static > 1;
             my $stat = $static->[0];
-            if (my $props = delete $stat->{properties}) {
-               while (my ($k, $v) = each %$props) {
-                  $monst->{properties}{$k} = $v;
+            while (my ($key, $val) = each %$stat) {
+               if (ref $val) {
+                  my $targ = $monst->{$key} ||= {};
+                  while (my ($k, $v) = each %$val) {
+                     $targ->{$k} = $v;
+                  }
                }
-            }
-            if (defined(my $stun = delete $stat->{allow_stun})) {
-               $monst->{properties}{allow_stun} = $stun;
-            }
-            while (my ($k, $v) = each %$stat) {
-               $monst->{$k} = $v;
+               else {
+                  $monst->{$key} = $val;
+               }
             }
          }
          print $OUT "<li>\n{{Monster\n| monster_id = $monst->{id}\n";
