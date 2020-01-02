@@ -3,6 +3,7 @@ use utf8;
 use strict;
 use warnings;
 use JSON ();
+use Storable qw( dclone );
 
 my $json = JSON->new();
 #$json->boolean_values(0, 1);
@@ -48,83 +49,25 @@ my @modifiers = qw(
 
       foreach my $monst (@{$monst_names{$name}}) {
          if (my $static = $static_monsters->{$monst->{id}}) {
-            die 'too many' if @$static > 1;
-            my $stat = $static->[0];
-            while (my ($key, $val) = each %$stat) {
-               if (ref $val) {
-                  my $targ = $monst->{$key} ||= {};
-                  while (my ($k, $v) = each %$val) {
-                     $targ->{$k} = $v;
+            foreach my $stat (@$static) {
+               my $mcopy = dclone($monst);
+               while (my ($key, $val) = each %$stat) {
+                  if (ref $val) {
+                     my $targ = $mcopy->{$key} ||= {};
+                     while (my ($k, $v) = each %$val) {
+                        $targ->{$k} = $v;
+                     }
+                  }
+                  else {
+                     $mcopy->{$key} = $val;
                   }
                }
-               else {
-                  $monst->{$key} = $val;
-               }
+               show_monster($OUT, $mcopy, \%cats);
             }
          }
-         print $OUT "<li>\n{{Monster\n| monster_id = $monst->{id}\n";
-         if (my $grname = $graphics->{$monst->{graphic_id}}) {
-            my $shortname = $grname;
-            $shortname =~ s/^.*_(?=[[:alpha:]])//;
-            $shortname =~ s/([[:lower:]])_?([[:upper:]]|\d)/$1 $2/g;
-            print $OUT "| name = \u$shortname\n";
-            print $OUT "| imgname = $grname.png\n";
+         else {
+            show_monster($OUT, $monst, \%cats);
          }
-
-         show_attacks($OUT, $monst);
-
-         if (my $tags = $monst->{tags}) {
-            my $n = 0;
-            foreach my $tag (sort @$tags) {
-               next if $tag eq 'hits_based' || $tag eq 'armor_based';
-               (my $uc = $tag) =~ s/\b(\w)/\u$1/g;
-               $n++;
-               print $OUT "| tags$n = $uc\n";
-               $cats{$uc} = 1;
-            }
-         }
-
-         if (my $props = $monst->{properties}) {
-            if (my $eff = $props->{effect_on_hit}) {
-               $eff = $eff->{effect_string} if ref $eff;
-               print $OUT "| effect = $eff\n";
-            }
-            if (my $eff = $props->{effect_when_hit}) {
-               print $OUT "| effect = $eff when hit\n";
-            }
-            my %props;
-            foreach my $p (@properties) {
-               $props{$p} = 1 if $props->{$p};
-            }
-            $props{stun_immune} = 1 unless $props->{allow_stun} // 1;
-            $props{impassable} = 1 unless $props->{passable} // 1;
-            if (my $ranges = $props->{first_health_ranges}) {
-               foreach my $range (@$ranges) {
-                  my $type = $range->{type} or next;
-                  if ($type eq 'armor_based') {
-                     $props{armor_based_damage} = 1;
-                  }
-                  elsif ($type eq 'hits_based') {
-                     $props{hits_based_damage} = 1;
-                  }
-               }
-            }
-            foreach my $p (sort keys %props) {
-               print $OUT "| $p = true\n";
-               my $uc = ucfirst($p);
-               $uc =~ s/_/ /g;
-               $cats{$uc} = 1;
-            }
-            show_spawn($OUT, $props);
-         }
-
-         foreach my $mod (@modifiers) {
-            my $val = $monst->{$mod};
-            next unless defined($val);
-            print $OUT "| $mod = $val\n";
-         }
-
-         print $OUT "}}\n</li>\n";
       }
 
       print $OUT "</ul>\n";
@@ -133,6 +76,73 @@ my @modifiers = qw(
    }
 
    system 'diff -ur oldmonsters monsters' if -d 'oldmonsters';
+}
+
+sub show_monster {
+   my ($OUT, $monst, $cats) = @_;
+   print $OUT "<li>\n{{Monster\n| monster_id = $monst->{id}\n";
+   if (my $grname = $graphics->{$monst->{graphic_id}}) {
+      my $shortname = $grname;
+      $shortname =~ s/^.*_(?=[[:alpha:]])//;
+      $shortname =~ s/([[:lower:]])_?([[:upper:]]|\d)/$1 $2/g;
+      print $OUT "| name = \u$shortname\n";
+      print $OUT "| imgname = $grname.png\n";
+   }
+
+   show_attacks($OUT, $monst);
+
+   if (my $tags = $monst->{tags}) {
+      my $n = 0;
+      foreach my $tag (sort @$tags) {
+         next if $tag eq 'hits_based' || $tag eq 'armor_based';
+         (my $uc = $tag) =~ s/\b(\w)/\u$1/g;
+         $n++;
+         print $OUT "| tags$n = $uc\n";
+         $cats->{$uc} = 1;
+      }
+   }
+
+   if (my $props = $monst->{properties}) {
+      if (my $eff = $props->{effect_on_hit}) {
+         $eff = $eff->{effect_string} if ref $eff;
+         print $OUT "| effect = $eff\n";
+      }
+      if (my $eff = $props->{effect_when_hit}) {
+         print $OUT "| effect = $eff when hit\n";
+      }
+      my %props;
+      foreach my $p (@properties) {
+         $props{$p} = 1 if $props->{$p};
+      }
+      $props{stun_immune} = 1 unless $props->{allow_stun} // 1;
+      $props{impassable} = 1 unless $props->{passable} // 1;
+      if (my $ranges = $props->{first_health_ranges}) {
+         foreach my $range (@$ranges) {
+            my $type = $range->{type} or next;
+            if ($type eq 'armor_based') {
+               $props{armor_based_damage} = 1;
+            }
+            elsif ($type eq 'hits_based') {
+               $props{hits_based_damage} = 1;
+            }
+         }
+      }
+      foreach my $p (sort keys %props) {
+         print $OUT "| $p = true\n";
+         my $uc = ucfirst($p);
+         $uc =~ s/_/ /g;
+         $cats->{$uc} = 1;
+      }
+      show_spawn($OUT, $props);
+   }
+
+   foreach my $mod (@modifiers) {
+      my $val = $monst->{$mod};
+      next unless defined($val);
+      print $OUT "| $mod = $val\n";
+   }
+
+   print $OUT "}}\n</li>\n";
 }
 
 sub show_spawn {
