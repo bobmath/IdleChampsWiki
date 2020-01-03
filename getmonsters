@@ -15,15 +15,11 @@ my $static_monsters = load_json('defines/monster_defines/static') || {};
 my ($attacks, $graphics) = load_other();
 
 my @properties = qw(
-   armor_based_damage
    dies_at_formation
-   hits_based_damage
-   indestructible
 );
 
 my @modifiers = qw(
    gold_modifier
-   health_modifier
    speed_modifier
 );
 
@@ -86,6 +82,7 @@ sub show_monster {
    }
 
    show_attacks($OUT, $monst, $cats);
+   show_health($OUT, $monst, $cats);
 
    if (my $tags = $monst->{tags}) {
       my $n = 0;
@@ -314,7 +311,7 @@ sub effect_desc {
       return "stun ${time}s";
    }
    elsif ($str =~ /^monster_damage_increase,(\d+)/) {
-      return "monster damage increased $1%";
+      return "increase monster damage $1%";
    }
    elsif ($str =~ /^effect_def,(\d+)/) {
       if ($1 == 43) {
@@ -339,6 +336,50 @@ sub effect_desc {
    else {
       return "effect $str";
    }
+}
+
+sub show_health {
+   my ($OUT, $monst, $cats) = @_;
+   my $props = $monst->{properties} || {};
+   my @health;
+   my $health = $monst->{health_modifier} // 1;
+
+   if (my $ranges = $props->{first_health_ranges}) {
+      foreach my $range (@$ranges) {
+         my $type = $range->{type} or next;
+         if ($type eq 'armor_based') {
+            my $pts = $range->{armor_chunks} || 0;
+            push @health, "$pts [[File:Health_Shield.png]] armor";
+            $health ||= 1;
+            $cats->{'Armor based damage'} = 1;
+         }
+         else {
+            push @health, "first range $type";
+         }
+      }
+   }
+
+   if (ref $props->{indestructible}) {
+      push @health, 'indestructible';
+      $cats->{Indestructible} = 1;
+   }
+   elsif ($props->{hits_based_damage}) {
+      push @health, "×$health hit-based";
+      $cats->{'Hits based damage'} = 1;
+   }
+   elsif ($props->{armor_based_damage}) {
+      push @health, "×$health armor-based [[File:Health_Shield.png|20px]]";
+      $cats->{'Armor based damage'} = 1;
+   }
+   elsif ($health != 1) {
+      push @health, "×$health";
+   }
+
+   if (my $start = $props->{starting_health_percent}) {
+      push @health, "$start% starting health";
+   }
+
+   print $OUT "| health_modifier = ", join('<br>', @health), "\n" if @health;
 }
 
 sub load_json {
