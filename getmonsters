@@ -95,25 +95,24 @@ sub show_monster {
       }
    }
 
-   if (my $props = $monst->{properties}) {
-      if (my $eff = $props->{effect_when_hit}) {
-         $eff = effect_desc($eff, $monst);
-         print $OUT "| effect = $eff when hit\n";
-      }
-      my %props;
-      foreach my $p (@properties) {
-         $props{$p} = 1 if $props->{$p};
-      }
-      $props{stun_immune} = 1 unless $props->{allow_stun} // 1;
-      $props{impassable} = 1 unless $props->{passable} // 1;
-      foreach my $p (sort keys %props) {
-         print $OUT "| $p = true\n";
-         my $uc = ucfirst($p);
-         $uc =~ s/_/ /g;
-         $cats->{$uc} = 1;
-      }
-      show_spawn($OUT, $props);
+   my $props = $monst->{properties} || {};
+   if (my $eff = $props->{effect_when_hit}) {
+      $eff = effect_desc($eff, $monst);
+      print $OUT "| effect = $eff when hit\n";
    }
+   my %props;
+   foreach my $p (@properties) {
+      $props{$p} = 1 if $props->{$p};
+   }
+   $props{stun_immune} = 1 unless $props->{allow_stun} // 1;
+   $props{impassable} = 1 unless $props->{passable} // 1;
+   foreach my $p (sort keys %props) {
+      print $OUT "| $p = true\n";
+      my $uc = ucfirst($p);
+      $uc =~ s/_/ /g;
+      $cats->{$uc} = 1;
+   }
+   show_spawn($OUT, $props);
 
    foreach my $mod (@modifiers) {
       my $val = $monst->{$mod};
@@ -357,9 +356,10 @@ sub show_health {
       }
    }
 
-   if (ref $props->{indestructible}) {
+   my $indestruct = $props->{indestructible};
+   $cats->{Indestructible} = 1 if $indestruct;
+   if (ref $indestruct) {
       push @health, 'indestructible';
-      $cats->{Indestructible} = 1;
    }
    elsif ($props->{hits_based_damage}) {
       push @health, "×$health hit-based";
@@ -370,10 +370,15 @@ sub show_health {
       $cats->{'Armor based damage'} = 1;
    }
    elsif (my $override = $props->{override_health}) {
-      push @health, $override;
+      push @health, "$override (fixed)";
    }
    elsif ($health != 1 || $tag) {
       push @health, "×$health$tag";
+   }
+
+   if ($indestruct && !ref($indestruct)) {
+      $indestruct =~ s/_/ /g;
+      push @health, "indestructible $indestruct";
    }
 
    if (my $start = $props->{starting_health_percent}) {
