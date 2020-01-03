@@ -256,7 +256,7 @@ sub attack_desc {
    }
 
    $num_attacks ||= $att->{num_targets} || 1;
-   push @props, "$num_attacks attacks" unless $num_attacks == 1;
+   push @props, "attacks $num_attacks" unless $num_attacks == 1;
 
    if ($mprops->{die_after_damage_hero}) {
       push @props, 'dies after attack';
@@ -368,6 +368,9 @@ sub show_health {
    elsif ($props->{armor_based_damage}) {
       push @health, "×$health armor-based [[File:Health_Shield.png|20px]]";
       $cats->{'Armor based damage'} = 1;
+   }
+   elsif (my $override = $props->{override_health}) {
+      push @health, $override;
    }
    elsif ($health != 1 || $tag) {
       push @health, "×$health$tag";
