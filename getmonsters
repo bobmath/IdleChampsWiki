@@ -96,11 +96,8 @@ sub show_monster {
    }
 
    if (my $props = $monst->{properties}) {
-      if (my $eff = $props->{effect_on_hit}) {
-         $eff = $eff->{effect_string} if ref $eff;
-         print $OUT "| effect = $eff\n";
-      }
       if (my $eff = $props->{effect_when_hit}) {
+         $eff = effect_desc($eff, $monst);
          print $OUT "| effect = $eff when hit\n";
       }
       my %props;
@@ -109,17 +106,6 @@ sub show_monster {
       }
       $props{stun_immune} = 1 unless $props->{allow_stun} // 1;
       $props{impassable} = 1 unless $props->{passable} // 1;
-      if (my $ranges = $props->{first_health_ranges}) {
-         foreach my $range (@$ranges) {
-            my $type = $range->{type} or next;
-            if ($type eq 'armor_based') {
-               $props{armor_based_damage} = 1;
-            }
-            elsif ($type eq 'hits_based') {
-               $props{hits_based_damage} = 1;
-            }
-         }
-      }
       foreach my $p (sort keys %props) {
          print $OUT "| $p = true\n";
          my $uc = ucfirst($p);
@@ -259,14 +245,14 @@ sub attack_desc {
          if (my $frames = $anim->{effect_frames}) {
             foreach my $name (sort keys %$frames) {
                my $frame = $frames->{$name};
-               push @props, effect_desc($frame);
+               push @props, effect_desc($frame, $monst);
             }
          }
       }
    }
 
    if (my $eff = $mprops->{effect_on_hit}) {
-      push @props, effect_desc($eff);
+      push @props, effect_desc($eff, $monst);
    }
 
    $num_attacks ||= $att->{num_targets} || 1;
@@ -286,7 +272,7 @@ sub attack_desc {
 }
 
 sub effect_desc {
-   my ($info) = @_;
+   my ($info, $monst) = @_;
    my $str;
    if (ref $info) {
       $str = $info->{effect_string};
@@ -296,11 +282,11 @@ sub effect_desc {
       $info = {};
    }
    return unless $str;
-   if ($str =~ /^add_monster_health,(\d+)/) {
-      return "lifesteal $1";
+   if ($str =~ /^add_monster_health,(\d+),?(\d*)/) {
+      return add_target("lifesteal $1", $2, $monst->{id});
    }
-   elsif ($str =~ /^add_monster_health_percent,(\d+)/) {
-      return "lifesteal $1%";
+   elsif ($str =~ /^add_monster_health_percent,(\d+),?(\d*)/) {
+      return add_target("lifesteal $1%", $2, $monst->{id});
    }
    elsif ($str =~ /^base_attack_speed_decrease,(\d+)/) {
       my $time = $info->{for_time} or die;
@@ -338,19 +324,31 @@ sub effect_desc {
    }
 }
 
+sub add_target {
+   my ($str, $id, $id2) = @_;
+   if ($id && $id2 && $id != $id2) {
+      my $targ = $monsters->{$id} or die;
+      my $name = $targ->{name};
+      $name = "$targ->{_name}|$name" if $targ->{_name};
+      $str .= " to [[$name]]";
+   }
+   return $str;
+}
+
 sub show_health {
    my ($OUT, $monst, $cats) = @_;
    my $props = $monst->{properties} || {};
    my @health;
    my $health = $monst->{health_modifier} // 1;
+   my $tag = '';
 
    if (my $ranges = $props->{first_health_ranges}) {
       foreach my $range (@$ranges) {
          my $type = $range->{type} or next;
          if ($type eq 'armor_based') {
             my $pts = $range->{armor_chunks} || 0;
-            push @health, "$pts [[File:Health_Shield.png]] armor";
-            $health ||= 1;
+            push @health, "×$pts armor [[File:Health_Shield.png|20px]]";
+            $tag = ' health';
             $cats->{'Armor based damage'} = 1;
          }
          else {
@@ -371,8 +369,8 @@ sub show_health {
       push @health, "×$health armor-based [[File:Health_Shield.png|20px]]";
       $cats->{'Armor based damage'} = 1;
    }
-   elsif ($health != 1) {
-      push @health, "×$health";
+   elsif ($health != 1 || $tag) {
+      push @health, "×$health$tag";
    }
 
    if (my $start = $props->{starting_health_percent}) {
