@@ -16,16 +16,12 @@ my ($attacks, $graphics) = load_other();
 
 my @properties = qw(
    armor_based_damage
-   die_after_damage_hero
    dies_at_formation
    hits_based_damage
    indestructible
-   insta_kill
-   stun_immune
 );
 
 my @modifiers = qw(
-   damage_modifier
    gold_modifier
    health_modifier
    speed_modifier
@@ -89,7 +85,7 @@ sub show_monster {
       print $OUT "| imgname = $grname.png\n";
    }
 
-   show_attacks($OUT, $monst);
+   show_attacks($OUT, $monst, $cats);
 
    if (my $tags = $monst->{tags}) {
       my $n = 0;
@@ -196,7 +192,7 @@ sub load_defines {
 }
 
 sub show_attacks {
-   my ($OUT, $monst) = @_;
+   my ($OUT, $monst, $cats) = @_;
    my @attacks = ( $monst->{attack_id} );
    if (my $more = $monst->{properties}{more_attacks}) {
       foreach my $att (@$more) {
@@ -211,12 +207,137 @@ sub show_attacks {
       next if $seen{$id};
       $seen{$id} = 1;
       my $att = $attacks->{$id} or die;
+      my $desc = attack_desc($att, $monst, $cats);
       $n++;
-      print $OUT "| attack_$n = $att->{name}\n";
+      print $OUT "| attack_$n = $desc\n";
       foreach my $anim (@{$att->{animations}}) {
          push @attacks, $anim->{chain_attack_id},
             $anim->{update_base_attack_after};
       }
+   }
+}
+
+sub attack_desc {
+   my ($att, $monst, $cats) = @_;
+   my @props;
+   my $mprops = $monst->{properties} || {};
+
+   if (my $types = $att->{damage_types}) {
+      push @props, @$types;
+   }
+
+   my $targ = $att->{target} || '';
+   if ($targ ne 'front') {
+      $targ =~ s/^formation_slots,/slots /;
+      $targ =~ s/_/ /g;
+      push @props, "target $targ";
+   }
+
+   if ($mprops->{insta_kill}) {
+      push @props, 'insta-kill';
+      $cats->{'Insta kill'} = 1;
+   }
+   else {
+      my $dmg = ($att->{damage_modifier} // 1)
+         * ($monst->{damage_modifier} // 1);
+      push @props, "damage ×$dmg" unless $dmg == 1;
+   }
+
+   my $num_attacks;
+   if (my $anims = $att->{animations}) {
+      foreach my $anim (@$anims) {
+         if (my $num = $anim->{projectile_count} || $anim->{chain_targets}) {
+            $num_attacks = $num;
+         }
+         if (my $min = $anim->{min_damage_percent}) {
+            push @props, "min dmg $min% hero health";
+         }
+         if (my $aoe = $anim->{aoe_targets}) {
+            $aoe =~ s/_/ /g;
+            push @props, "splash $aoe";
+         }
+         if (my $hits = $anim->{hit_frames}) {
+            $num_attacks ||= @$hits;
+         }
+         if (my $frames = $anim->{effect_frames}) {
+            foreach my $name (sort keys %$frames) {
+               my $frame = $frames->{$name};
+               push @props, effect_desc($frame);
+            }
+         }
+      }
+   }
+
+   if (my $eff = $mprops->{effect_on_hit}) {
+      push @props, effect_desc($eff);
+   }
+
+   $num_attacks ||= $att->{num_targets} || 1;
+   push @props, "$num_attacks attacks" unless $num_attacks == 1;
+
+   if ($mprops->{die_after_damage_hero}) {
+      push @props, 'dies after attack';
+      $cats->{'Die after damage hero'} = 1;
+   }
+   elsif (my $cd = $att->{cooldown}) {
+      push @props, "cooldown ${cd}s";
+   }
+
+   my $name = $att->{name};
+   $name .= ' (' . join(', ', @props) . ')' if @props;
+   return $name;
+}
+
+sub effect_desc {
+   my ($info) = @_;
+   my $str;
+   if (ref $info) {
+      $str = $info->{effect_string};
+   }
+   else {
+      $str = $info;
+      $info = {};
+   }
+   return unless $str;
+   if ($str =~ /^add_monster_health,(\d+)/) {
+      return "lifesteal $1";
+   }
+   elsif ($str =~ /^add_monster_health_percent,(\d+)/) {
+      return "lifesteal $1%";
+   }
+   elsif ($str =~ /^base_attack_speed_decrease,(\d+)/) {
+      my $time = $info->{for_time} or die;
+      return "slow $1% for ${time}s";
+   }
+   elsif ($str =~ /^disable_hero_properties,/) {
+      my $time = $info->{for_time} or die;
+      return "stun ${time}s";
+   }
+   elsif ($str =~ /^monster_damage_increase,(\d+)/) {
+      return "monster damage increased $1%";
+   }
+   elsif ($str =~ /^effect_def,(\d+)/) {
+      if ($1 == 43) {
+         return "next hero attack slowed 75%";
+      }
+      elsif ($1 == 45) {
+         return "hero dps reduced 90% for 5s";
+      }
+      elsif ($1 == 366) {
+         return "stun 15s after 4 hits";
+      }
+      elsif ($1 == 368) {
+         return "slow by 2s for 10s";
+      }
+      elsif ($1 == 485) {
+         return "slow by 0.25s until next area";
+      }
+      else {
+         return "effect $1";
+      }
+   }
+   else {
+      return "effect $str";
    }
 }
 
