@@ -298,6 +298,7 @@ sub do_hero {
    }
 
    if (my $feats = $hero_feats->{$id}) {
+      @$feats = sort { $a->{order} <=> $b->{order} } @$feats;
       show_feats($OUT, $hero, $feats);
       foreach my $feat (@$feats) {
          print $RAW "Feat ", $json->encode($feat), "\n";
