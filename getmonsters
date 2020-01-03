@@ -14,15 +14,6 @@ my $monsters = load_defines('monster_defines');
 my $static_monsters = load_json('defines/monster_defines/static') || {};
 my ($attacks, $graphics) = load_other();
 
-my @properties = qw(
-   dies_at_formation
-);
-
-my @modifiers = qw(
-   gold_modifier
-   speed_modifier
-);
-
 {
    my %monst_names;
    foreach my $id (sort { $a <=> $b } keys %$monsters) {
@@ -72,52 +63,55 @@ my @modifiers = qw(
 
 sub show_monster {
    my ($OUT, $monst, $cats) = @_;
-   print $OUT "<li>\n{{Monster\n| monster_id = $monst->{id}\n";
+   print $OUT "<li>\n{{MonsterBox\n| monster_id = $monst->{id}\n";
    if (my $grname = $graphics->{$monst->{graphic_id}}) {
       my $shortname = $grname;
       $shortname =~ s/^.*_(?=[[:alpha:]])//;
       $shortname =~ s/([[:lower:]])_?([[:upper:]]|\d)/$1 $2/g;
       print $OUT "| name = \u$shortname\n";
-      print $OUT "| imgname = $grname.png\n";
+      print $OUT "| image = $grname.png\n";
    }
 
-   show_attacks($OUT, $monst, $cats);
+   show_attacks($OUT, $monst);
    show_health($OUT, $monst, $cats);
-
-   if (my $tags = $monst->{tags}) {
-      my $n = 0;
-      foreach my $tag (sort @$tags) {
-         next if $tag eq 'hits_based' || $tag eq 'armor_based';
-         (my $uc = $tag) =~ s/\b(\w)/\u$1/g;
-         $n++;
-         print $OUT "| tags$n = $uc\n";
-         $cats->{$uc} = 1;
-      }
-   }
 
    my $props = $monst->{properties} || {};
    if (my $eff = $props->{effect_when_hit}) {
       $eff = effect_desc($eff, $monst);
       print $OUT "| effect = $eff when hit\n";
    }
-   my %props;
-   foreach my $p (@properties) {
-      $props{$p} = 1 if $props->{$p};
+   my %special;
+   if (!($props->{allow_stun} // 1) || !($props->{hit_stuns} // 1)) {
+      $special{'stun immune'} = 1;
    }
-   $props{stun_immune} = 1 unless $props->{allow_stun} // 1;
-   $props{impassable} = 1 unless $props->{passable} // 1;
-   foreach my $p (sort keys %props) {
-      print $OUT "| $p = true\n";
-      my $uc = ucfirst($p);
-      $uc =~ s/_/ /g;
-      $cats->{$uc} = 1;
+   unless ($props->{passable} // 1) {
+      $special{impassable} = 1;
+   }
+   if ($props->{start_invisible}) {
+      $special{'invisible until attack'} = 1;
+   }
+   if (%special) {
+      print $OUT "| special = ", join(', ', sort keys %special), "\n";
    }
    show_spawn($OUT, $props);
 
-   foreach my $mod (@modifiers) {
-      my $val = $monst->{$mod};
-      next unless defined($val);
-      print $OUT "| $mod = $val\n";
+   if (my $speed = $monst->{speed_modifier}) {
+      print $OUT "| speed = ×$speed\n";
+   }
+   if (my $gold = $monst->{gold_modifier}) {
+      print $OUT "| gold = ×$gold\n";
+   }
+
+   if (my $tags = $monst->{tags}) {
+      my %tags;
+      my $n = 0;
+      foreach my $tag (sort @$tags) {
+         next if $tag eq 'hits_based' || $tag eq 'armor_based';
+         $tags{$tag} = 1;
+         (my $uc = $tag) =~ s/\b(\w)/\u$1/g;
+         $cats->{$uc} = 1;
+      }
+      print $OUT "| tags = ", join(', ', sort keys %tags), "\n" if %tags;
    }
 
    print $OUT "}}\n</li>\n";
@@ -158,23 +152,8 @@ sub show_spawn {
    print $OUT "| spawn_on_death = @spawn\n" if @spawn;
 }
 
-sub load_defines {
-   my ($name) = @_;
-   opendir my $DIR, "defines/$name" or die;
-   my $data = {};
-   local $/ = undef;
-   foreach my $file (readdir $DIR) {
-      next if $file =~ /\D/;
-      open my $IN, '<:utf8', "defines/$name/$file" or die;
-      $data->{$file} = $json->decode(<$IN>);
-      close $IN;
-   }
-   closedir $DIR;
-   return $data;
-}
-
 sub show_attacks {
-   my ($OUT, $monst, $cats) = @_;
+   my ($OUT, $monst) = @_;
    my @attacks = ( $monst->{attack_id} );
    if (my $more = $monst->{properties}{more_attacks}) {
       foreach my $att (@$more) {
@@ -189,9 +168,9 @@ sub show_attacks {
       next if $seen{$id};
       $seen{$id} = 1;
       my $att = $attacks->{$id} or die;
-      my $desc = attack_desc($att, $monst, $cats);
+      my $desc = attack_desc($att, $monst);
       $n++;
-      print $OUT "| attack_$n = $desc\n";
+      print $OUT "| attack$n = $desc\n";
       foreach my $anim (@{$att->{animations}}) {
          push @attacks, $anim->{chain_attack_id},
             $anim->{update_base_attack_after};
@@ -200,7 +179,7 @@ sub show_attacks {
 }
 
 sub attack_desc {
-   my ($att, $monst, $cats) = @_;
+   my ($att, $monst) = @_;
    my @props;
    my $mprops = $monst->{properties} || {};
 
@@ -217,7 +196,6 @@ sub attack_desc {
 
    if ($mprops->{insta_kill}) {
       push @props, 'insta-kill';
-      $cats->{'Insta kill'} = 1;
    }
    else {
       my $dmg = ($att->{damage_modifier} // 1)
@@ -257,9 +235,10 @@ sub attack_desc {
    $num_attacks ||= $att->{num_targets} || 1;
    push @props, "attacks $num_attacks" unless $num_attacks == 1;
 
-   if ($mprops->{die_after_damage_hero}) {
+   if ($mprops->{die_after_damage_hero}
+      || $mprops->{die_after_damage_hero_immediate})
+   {
       push @props, 'dies after attack';
-      $cats->{'Die after damage hero'} = 1;
    }
    elsif (my $cd = $att->{cooldown}) {
       push @props, "cooldown ${cd}s";
@@ -357,7 +336,6 @@ sub show_health {
    }
 
    my $indestruct = $props->{indestructible};
-   $cats->{Indestructible} = 1 if $indestruct;
    if (ref $indestruct) {
       push @health, 'indestructible';
    }
@@ -384,8 +362,30 @@ sub show_health {
    if (my $start = $props->{starting_health_percent}) {
       push @health, "$start% starting health";
    }
+   if (my $death = $props->{death_health_percent}) {
+      push @health, "dies at $death% health";
+   }
 
-   print $OUT "| health_modifier = ", join('<br>', @health), "\n" if @health;
+   if ($props->{dies_at_formation}) {
+      push @health, 'dies at formation';
+   }
+
+   print $OUT "| health = ", join('<br>', @health), "\n" if @health;
+}
+
+sub load_defines {
+   my ($name) = @_;
+   opendir my $DIR, "defines/$name" or die;
+   my $data = {};
+   local $/ = undef;
+   foreach my $file (readdir $DIR) {
+      next if $file =~ /\D/;
+      open my $IN, '<:utf8', "defines/$name/$file" or die;
+      $data->{$file} = $json->decode(<$IN>);
+      close $IN;
+   }
+   closedir $DIR;
+   return $data;
 }
 
 sub load_json {
