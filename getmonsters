@@ -329,6 +329,11 @@ sub show_health {
             $tag = ' health';
             $cats->{'Armor based damage'} = 1;
          }
+         elsif ($type eq 'favor') {
+            my $pts = $range->{amount} || 0;
+            push @health, "×$pts minions";
+            $tag = ' health';
+         }
          else {
             push @health, "first range $type";
          }
