@@ -78,7 +78,7 @@ sub show_monster {
    my $props = $monst->{properties} || {};
    if (my $eff = $props->{effect_when_hit}) {
       $eff = effect_desc($eff, $monst);
-      print $OUT "| effect = $eff when hit\n";
+      print $OUT "| effect_when_hit = $eff\n";
    }
    my %special;
    if (!($props->{allow_stun} // 1) || !($props->{hit_stuns} // 1)) {
@@ -89,6 +89,9 @@ sub show_monster {
    }
    if ($props->{start_invisible}) {
       $special{'invisible until attack'} = 1;
+   }
+   if ($props->{cycle_available_attacks}) {
+      $special{'cycle through attacks'} = 1;
    }
    if (%special) {
       print $OUT "| special = ", join(', ', sort keys %special), "\n";
