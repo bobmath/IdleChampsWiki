@@ -110,6 +110,7 @@ sub show_monster {
       my $n = 0;
       foreach my $tag (sort @$tags) {
          next if $tag eq 'hits_based' || $tag eq 'armor_based';
+         $tag =~ s/_/ /g;
          $tags{$tag} = 1;
          (my $uc = $tag) =~ s/\b(\w)/\u$1/g;
          $cats->{$uc} = 1;
@@ -192,6 +193,7 @@ sub attack_desc {
 
    my $targ = $att->{target} || '';
    if ($targ ne 'front') {
+      $targ = 'all' if $targ eq 'front_2_col';
       $targ =~ s/^formation_slots,/slots /;
       $targ =~ s/_/ /g;
       push @props, "target $targ";
