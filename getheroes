@@ -14,6 +14,8 @@ local $/ = undef;
 my $defines = $json->decode(<$IN>);
 close $IN;
 
+binmode STDOUT, ':utf8';
+
 my @hero_defines =
    grep { $_->{name} !~ /^E\d+Y\d+$/ } @{$defines->{hero_defines}};
 my $heroes = build_index(\@hero_defines);
@@ -348,6 +350,11 @@ sub do_upgrade {
       $spec =~ s/\?//g;
       $disp = "$spec|$disp" if $spec ne $disp;
       my $mile = $hero->{_milestones}[-1];
+      if ($hero->{_seen_specs}{$spec}) {
+         $mile->{'Second Specialization'} = 1;
+         return;
+      }
+      $hero->{_seen_specs}{$spec} = 1;
       $hero->{_abils} .= "'''<u>Specialization Choice – Level $level</u>'''\n\n"
          unless $mile->{_specs};
       if ($spec =~ /\}#/) {
