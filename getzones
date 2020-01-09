@@ -488,9 +488,12 @@ sub show_advent {
 
    print $OUT "|objectives=$adv->{objectives_text}\n";
 
-   my $restr = $adv->{restrictions_text};
-   $restr =~ s/\s*\n/<br>/g;
-   print $OUT "|restrictions=$restr\n" unless lc($restr) eq 'no restrictions';
+   $n = 1;
+   foreach my $restr (split /[\r\n]+/, $adv->{restrictions_text}) {
+      next if lc($restr) eq 'no restrictions';
+      print $OUT "|restriction$n=$restr\n";
+      $n++;
+   }
 
    my @rewards = get_rewards($adv->{rewards}, $adv->{name});
    if ($favor) {
