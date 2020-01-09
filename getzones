@@ -55,6 +55,7 @@ my %event_tokens = (
    3  => "[[File:Icon_Skulls.png|24px]] Skulls",
    4  => "[[File:Icon_Candles.png|24px]] Candles",
    5  => "[[File:Icon_Snowflakes.png|24px]] Snowflakes",
+   9  => "[[File:Icon_Giftboxes.png|24px]] Giftboxes",
    49 => "[[File:Icon_Owlbear_Feathers.png|24px]] Owlbear Feathers",
 );
 
