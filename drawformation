@@ -14,6 +14,8 @@ $json->boolean_values(0, 1);
 $json->indent(1);
 $json->canonical(1);
 
+binmode STDOUT, ':utf8';
+
 my $pi = 3.141592653589793;
 
 my $adv = read_json("adventure_defines/$adv_id");
@@ -322,7 +324,7 @@ sub draw_arrows {
 
 sub read_json {
    my ($file) = @_;
-   open my $IN, '<', "defines/$file" or die;
+   open my $IN, '<:utf8', "defines/$file" or die;
    local $/ = undef;
    my $data = $json->decode(<$IN>);
    close $IN;
