@@ -19,7 +19,7 @@ def load_json(path):
 
 def save_json(path, data, when):
    with open(path, 'w') as f:
-      json.dump(data, f, sort_keys=True, indent=2)
+      json.dump(data, f, sort_keys=True, ensure_ascii=False, indent=2)
    if when: os.utime(path, times=(when, when))
 
 def copy_keys(old, data):
