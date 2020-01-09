@@ -351,7 +351,7 @@ sub do_upgrade {
       $disp = "$spec|$disp" if $spec ne $disp;
       my $mile = $hero->{_milestones}[-1];
       if ($hero->{_seen_specs}{$spec}) {
-         $mile->{'Second Specialization'} = 1;
+         $mile->{_specs} ||= [];
          return;
       }
       $hero->{_seen_specs}{$spec} = 1;
