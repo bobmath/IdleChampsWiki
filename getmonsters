@@ -249,7 +249,8 @@ sub attack_desc {
       push @props, "cooldown ${cd}s";
    }
 
-   my $name = $att->{name};
+   my $name = $att->{description} ?
+      "{{Abbr|$att->{name}|$att->{description}}}" : $att->{name};
    $name .= ' (' . join(', ', @props) . ')' if @props;
    return $name;
 }
