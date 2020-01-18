@@ -261,6 +261,7 @@ sub do_hero {
       }
    }
 
+   $hero->{_level} = 1;
    $hero->{_milestones} = [{ _level => 1, _cost => sci($hero->{base_cost}) }];
    $hero->{_total_cost} = $hero->{base_cost};
 
@@ -310,28 +311,35 @@ sub do_hero {
    show_trailer($OUT, $hero);
 }
 
+sub level_cost {
+   my ($hero, $lvl) = @_;
+   my $old = $hero->{_level};
+   return 0 if $old >= $lvl;
+   my $curve = $hero->{cost_curves};
+   die if keys(%$curve) > 1;
+   my $mult = $curve->{1} or die;
+   my $cost = $hero->{base_cost} * $mult ** ($old - 1);
+   if ($cost < 1e16) {
+      my $tot = 0;
+      while ($old < $lvl) {
+         $old++;
+         $tot += int($cost + 0.5);
+         $cost *= $mult;
+      }
+      return $tot;
+   }
+   else {
+      # this calculates the same result, without rounding
+      return $cost * ($mult ** ($lvl - $old) - 1) / ($mult - 1);
+   }
+}
+
 sub do_upgrade {
    my ($hero, $upg) = @_;
    my $level = $upg->{required_level};
    return if $level >= 9999;
-   my $old_level = $hero->{_level} ||= 1;
-   if ($level > $old_level) {
-      my $curve = $hero->{cost_curves};
-      die if keys(%$curve) > 1;
-      my $mult = $curve->{1} or die;
-      my $tot = 0;
-      my $cost = $hero->{base_cost} * $mult ** ($old_level - 1);
-      if ($cost < 1e16) {
-         while ($old_level < $level) {
-            $old_level++;
-            $tot += int($cost + 0.5);
-            $cost *= $mult;
-         }
-      }
-      else {
-         # this calculates the same result, without rounding
-         $tot = $cost * ($mult ** ($level - $old_level) - 1) / ($mult - 1);
-      }
+   if ($level > $hero->{_level}) {
+      my $tot = level_cost($hero, $level);
       push @{$hero->{_milestones}}, { _level => $level, _cost => sci($tot) };
       $hero->{_total_cost} += $tot;
       $hero->{_level} = $level;
@@ -1196,8 +1204,15 @@ sub show_feats {
 
    print $OUT "==Feats==\n";
    if (my $unlock = $hero->{default_feat_slot_unlocks}) {
-      print $OUT "Unlocked at level", (@$unlock > 1 ? "s" : ""),
-         " ", list_names(@$unlock), "\n";
+      my $line = join('', "Unlocked at level", (@$unlock > 1 ? "s" : ""),
+         " ", list_names(@$unlock), ".");
+      my $lvl = @$unlock && $unlock->[-1];
+      if ($lvl && $lvl > $hero->{_level}) {
+         my $cost = sci(level_cost($hero, $lvl));
+         $line .= " Cost to upgrade from level $hero->{_level} to $lvl is "
+            . "{{Gold|$cost}}";
+      }
+      print $OUT $line, "\n";
    }
 
 print $OUT <<END;
