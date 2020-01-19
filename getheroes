@@ -611,6 +611,7 @@ sub do_ultimate {
             "$amt%");
       }
    }
+   do_ultimate($hero, $upg, $eff, 269) if $id == 268; # Havilar Sacrifice
 }
 
 sub do_monster_effect {
