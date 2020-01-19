@@ -484,6 +484,12 @@ sub do_effect {
    elsif ($key eq 'global_dps_multiplier_mult') {
       do_bonus($hero, $upg, 'Damage All', 'mul', $amt);
    }
+   elsif ($key eq 'havilar_demon_sickness') {
+      do_havilar_sickness($hero, $upg, $eff);
+   }
+   elsif ($key eq 'havilar_leadership_summit') {
+      do_havilar_summit($hero, $upg, $eff);
+   }
    elsif ($key eq 'health_add') {
       do_bonus($hero, $upg, 'Health', 'add', $amt);
    }
@@ -511,6 +517,28 @@ sub do_effect {
       do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, '');
       do_base_attack($hero, $upg, $eff, $params->{attack_id});
    }
+}
+
+sub do_havilar_summit {
+   my ($hero, $upg, $eff) = @_;
+   $eff->{_summit} = my $summit = parse_effect("effect_def,546,547,548,549");
+   my $desc;
+   foreach my $effdef (@{$summit->{_effects}}) {
+      my $effdesc = $effdef->{_desc} ||= effect_string($hero, $effdef);
+      $desc .= "\n* $effdesc";
+   }
+   $eff->{_params}{leadership_summit_description} = $desc;
+}
+
+sub do_havilar_sickness {
+   my ($hero, $upg, $eff) = @_;
+   $eff->{_sickness} = my $sick = parse_effect("effect_def,551,552,553,554");
+   my $desc;
+   foreach my $effdef (@{$sick->{_effects}}) {
+      my $effdesc = $effdef->{_desc} ||= effect_string($hero, $effdef);
+      $desc .= "\n* $effdesc";
+   }
+   $eff->{_params}{demon_sickness_description} = $desc;
 }
 
 sub do_echo {
