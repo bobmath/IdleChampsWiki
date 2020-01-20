@@ -409,13 +409,15 @@ sub add_monster {
 
    # tweak sort order to put spawned monsters after their spawner
    my $order = $monst_info->{order} ||= {};
+   my $sortname;
    if (my $prefix = $opts{prefix}) {
-      my $sortname = "$prefix:$name";
+      $sortname = "$prefix:$name";
       # if there are multiple spawners, pick the alphabetically lowest one
       $order->{$name} = $sortname unless defined($order->{$name})
          && $order->{$name} lt $sortname;
    }
    else {
+      $sortname = $name;
       $order->{$name} = ''; # non-spawned always counts as 'lowest'
    }
 
@@ -439,13 +441,13 @@ sub add_monster {
 
       if (my $spawn = $props->{spawns_monster_ids}) {
          foreach my $id (@$spawn) {
-            add_monster($id, $monst_info, %opts, prefix=>$name);
+            add_monster($id, $monst_info, %opts, prefix=>$sortname);
          }
       }
 
       if (my $spawn = $props->{spawns_monster_on_death}) {
          if (my $id = $spawn->{monster_id}) {
-            add_monster($id, $monst_info, %opts, prefix=>$name);
+            add_monster($id, $monst_info, %opts, prefix=>$sortname);
          }
          if (my $ids = $spawn->{monster_ids}) {
             foreach my $id (@$ids) {
