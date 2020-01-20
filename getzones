@@ -181,18 +181,17 @@ sub show_waves {
          add_monster_info($by_area[0], \%monsters, boss=>0);
       }
       add_monster_list($area->{monsters}, \%monsters);
-      my $wave_based;
       if (my $waves = $area->{waves}) {
-         $wave_based = 1;
          foreach my $i (0 .. $#$waves) {
             my $boss = $i >= 2 ? 1 : undef;
-            add_monster_list($waves->[$i], \%monsters, boss=>$boss);
+            add_monster_list($waves->[$i], \%monsters, boss=>$boss, num=>1);
          }
       }
 
       my %zonetags;
       if (my $props = $area->{properties}) {
-         add_monster_hash($props->{static_monsters}, \%monsters, static=>1);
+         add_monster_hash($props->{static_monsters}, \%monsters,
+            static=>1, num=>1);
          add_monster_gen($props->{monster_generators}, \%monsters, boss=>0);
          if (my $help = $props->{helper_display}) {
             if (my $desc = $help->{description}) {
@@ -221,7 +220,7 @@ sub show_waves {
          foreach my $name (@names) {
             my $count = $names->{$name};
             $name = "[[$name]]";
-            $name .= " ×$count" if $wave_based;
+            $name .= " ×$count" if $count < 1000;
          }
          push @tbl, [ $area->{area_id}, $zonetags, join(', ', @names),
             show_tags($tags) ];
@@ -234,7 +233,7 @@ sub show_waves {
          foreach my $name (@names) {
             my $count = $names->{$name};
             $name = "[[$name]]";
-            $name .= " ×$count" if $count > 1;
+            $name .= " ×$count" if $count > 1 && $count < 1000;
          }
          push @tbl, [ 'Boss', $zonetags, join(', ', @names),
             show_tags($tags) ];
@@ -401,7 +400,7 @@ sub add_monster {
    $tags{'hit-based'} = 1 if delete $tags{hits_based};
    $tags{'armor-based'} = 1 if delete $tags{armor_based};
    my $name = $monst->{_name} // $monst->{name};
-   $monst_info->{"$type-names"}{$name}++;
+   $monst_info->{"$type-names"}{$name} += $opts{num} // 1000;
    $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
    $tags->{$_}++ foreach keys %tags;
