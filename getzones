@@ -451,7 +451,7 @@ sub add_monster {
          }
          if (my $ids = $spawn->{monster_ids}) {
             foreach my $id (@$ids) {
-               add_monster($id, $monst_info, %opts);
+               add_monster($id, $monst_info, %opts, prefix=>$sortname);
             }
          }
       } # spawn on death
