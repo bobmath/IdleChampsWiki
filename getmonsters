@@ -381,6 +381,10 @@ sub show_health {
       push @health, 'dies at formation';
    }
 
+   if (my $respawn = $props->{undead_respawn_time}) {
+      push @health, "respawn after ${respawn}s";
+   }
+
    print $OUT "| health = ", join('<br>', @health), "\n" if @health;
 }
 
