@@ -216,7 +216,7 @@ sub show_waves {
 
       if (my $names = $monsters{'trash-names'}) {
          my $tags = $monsters{'trash-tags'} ||= {};
-         my @names = sort keys %$names;
+         my @names = sort_names($names, $monsters{order});
          foreach my $name (@names) {
             my $count = $names->{$name};
             $name = "[[$name]]";
@@ -229,7 +229,7 @@ sub show_waves {
 
       if (my $names = $monsters{'boss-names'}) {
          my $tags = $monsters{'boss-tags'} ||= {};
-         my @names = sort keys %$names;
+         my @names = sort_names($names, $monsters{order});
          foreach my $name (@names) {
             my $count = $names->{$name};
             $name = "[[$name]]";
@@ -279,6 +279,12 @@ sub show_waves {
    if (@desc) {
       print $OUT "===Descriptions===\n", @desc;
    }
+}
+
+sub sort_names {
+   my ($names, $order) = @_;
+   return sort { ($order->{$a} ||= $a) cmp ($order->{$b} ||= $b) }
+      keys %$names;
 }
 
 sub show_tags {
@@ -400,6 +406,19 @@ sub add_monster {
    $tags{'hit-based'} = 1 if delete $tags{hits_based};
    $tags{'armor-based'} = 1 if delete $tags{armor_based};
    my $name = $monst->{_name} // $monst->{name};
+
+   # tweak sort order to put spawned monsters after their spawner
+   my $order = $monst_info->{order} ||= {};
+   if (my $prefix = $opts{prefix}) {
+      my $sortname = "$prefix:$name";
+      # if there are multiple spawners, pick the alphabetically lowest one
+      $order->{$name} = $sortname unless defined($order->{$name})
+         && $order->{$name} lt $sortname;
+   }
+   else {
+      $order->{$name} = ''; # non-spawned always counts as 'lowest'
+   }
+
    $monst_info->{"$type-names"}{$name} += $opts{num} // 1000;
    $monst_info->{"$type-pics"}{$graphics{$monst->{graphic_id}}}++;
    my $tags = $monst_info->{"$type-tags"} ||= {};
@@ -420,13 +439,13 @@ sub add_monster {
 
       if (my $spawn = $props->{spawns_monster_ids}) {
          foreach my $id (@$spawn) {
-            add_monster($id, $monst_info, %opts);
+            add_monster($id, $monst_info, %opts, prefix=>$name);
          }
       }
 
       if (my $spawn = $props->{spawns_monster_on_death}) {
          if (my $id = $spawn->{monster_id}) {
-            add_monster($id, $monst_info, %opts);
+            add_monster($id, $monst_info, %opts, prefix=>$name);
          }
          if (my $ids = $spawn->{monster_ids}) {
             foreach my $id (@$ids) {
