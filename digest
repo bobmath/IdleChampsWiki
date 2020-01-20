@@ -166,6 +166,7 @@ def read_har(file):
       path = scrub_path(urllib.parse.unquote(url.path[14:]))
       if path == '': continue
       data = entry['response']['content']
+      if 'text' not in data: continue
       if data.get('encoding', '') == 'base64':
          text = base64.b64decode(data['text'])
       else:
