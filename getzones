@@ -446,7 +446,8 @@ sub add_monster {
 
       if (my $spawn = $props->{spawns_monster_on_death}) {
          if (my $id = $spawn->{monster_id}) {
-            add_monster($id, $monst_info, %opts, prefix=>$sortname);
+            add_monster($id, $monst_info, %opts, prefix=>$sortname,
+               num=>($opts{num}||1000)*($spawn->{count}||1));
          }
          if (my $ids = $spawn->{monster_ids}) {
             foreach my $id (@$ids) {

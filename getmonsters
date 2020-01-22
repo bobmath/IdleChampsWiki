@@ -139,13 +139,14 @@ sub show_spawn {
 
    my $spawn = $props->{spawns_monster_on_death} or return;
    my @ids;
+   my $count = $spawn->{count} || 1;
    if (my $id = $spawn->{monster_id}) { push @ids,  $id }
    if (my $ids = $spawn->{monster_ids}) { push @ids,  @$ids }
    my %spawn;
    foreach my $id (@ids) {
       my $monst = $monsters->{$id} or die;
       my $name = $monst->{_name} || $monst->{name};
-      $spawn{$name}++;
+      $spawn{$name} += $count;
    }
    my @spawn;
    foreach my $name (sort keys %spawn) {
