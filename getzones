@@ -302,28 +302,33 @@ sub show_patrons {
       open my $F, '>', "zones/$filename" or die;
       print $F qq[{| class="wikitable sortable"\n],
          "|-\n",
-         "! Variant || Adventure || Campaign || Influence || Currency\n";
+         "! Variant || Adventure || Campaign || ",
+         "Level || Influence || Currency\n";
 
       my $variants = $patron_variants{$patname};
-      @$variants = sort { $a->[3] <=> $b->[3] || $a->[4] <=> $b->[4]
-         || $a->[0] cmp $b->[0] } @$variants;
+      @$variants = sort { $a->{level} <=> $b->{level}
+         || $a->{infl} <=> $b->{infl} || $a->{curr} <=> $b->{curr}
+         || $a->{camp_id} <=> $b->{camp_id} || $a->{base_id} <=> $b->{base_id}
+         || $a->{id} <=> $b->{id} } @$variants;
       my $tot_infl = 0;
       my $tot_curr = 0;
       foreach my $var (@$variants) {
-         my ($name, $base, $camp, $infl, $curr) = @$var;
-         $tot_infl += $infl;
-         $tot_curr += $curr;
-         $infl = sci($infl);
-         $curr = commify($curr);
-         print $F "|-\n| [[$name]] || $base || $camp || $infl || $curr\n";
+         $tot_infl += $var->{infl};
+         $tot_curr += $var->{curr};
+         my $infl = sci($var->{infl});
+         my $curr = commify($var->{curr});
+         print $F "|-\n",
+            "| [[$var->{name}]] || $var->{base} || $var->{camp} ",
+            "|| $var->{level} || $infl || $curr\n";
       }
 
       $tot_infl = sci($tot_infl);
       $tot_curr = sci($tot_curr);
       print $F "|-\n",
-         qq[| colspan="3" align="right" | Total || $tot_infl || $tot_curr\n],
+         qq[| colspan="4" align="right" | Total || $tot_infl || $tot_curr\n],
          "|}\n",
-         "[[Category:Patrons]]\n";
+         "[[Category:Patrons]]\n",
+         "[[Category:Adventures| ]]\n";
       close $F;
    }
 }
@@ -597,11 +602,12 @@ sub show_advent {
       my $name = $patron_names{$patid} || 'Unknown';
 
       foreach my $varid (sort keys %$patvar) {
-         my @obj;
+         my (@obj, $level, %rewards);
          foreach my $obj (@{$patvar->{$varid}}) {
             my $cond = $obj->{condition};
             if ($cond eq 'complete_area') {
-               push @obj, "Complete Area $obj->{area}";
+               $level = $obj->{area};
+               push @obj, "Complete Area $level";
             }
             elsif ($cond eq 'objective_time_limit') {
                my $mins = $obj->{time} / 60;
@@ -611,7 +617,6 @@ sub show_advent {
                warn "$adv->{name} $cond";
             }
          }
-         my %rewards;
          my @rewards = get_rewards($adv->{patron_rewards}{$patid}{$varid},
             $adv->{name}, \%rewards);
 
@@ -620,10 +625,14 @@ sub show_advent {
          print $OUT "|patronobjectives$n=@obj\n" if @obj;
          print $OUT "|patronrewards$n=@rewards\n" if @rewards;
 
-         my $base = $advents->{$adv->{variant_adventure_id}};
-         push @{$patron_variants{$name}}, [ $adv->{name},
-            $base ? $base->{name} : '', $camp->{short_name},
-            $rewards{patron_influence} || 0, $rewards{patron_currency} || 0 ];
+         my $base = $advents->{$adv->{variant_adventure_id}} || {};
+         push @{$patron_variants{$name}}, {
+            name => $adv->{name}, id => $adv->{id},
+            base => $base->{name} || '', base_id => $base->{id} || 0,
+            camp => $camp->{short_name} || '', camp_id => $camp->{id},
+            level => $level || 0, infl => $rewards{patron_influence},
+            curr => $rewards{patron_currency},
+         };
       }
    }
 
