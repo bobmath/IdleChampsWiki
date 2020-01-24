@@ -66,12 +66,13 @@ my $backgrounds = load_defines('background_defines');
 my $advents = load_defines('adventure_defines');
 my $dialogue = load_defines('cinematics_defines');
 my $quests = load_defines('quest_defines');
-my (%enemy_types, %static_monsters);
+my (%enemy_types, %static_monsters, %patron_variants);
 
 mkdir 'zones';
 mkdir 'rawzones';
 show_zones();
 show_campaigns();
+show_patrons();
 show_enemies();
 system 'diff', '-ur', 'oldzones', 'zones' if -d 'oldzones';
 
@@ -291,6 +292,40 @@ sub show_tags {
    return join ' ',
       map { $favored_enemies{$_} ? "'''$_'''" : $_ }
       sort keys %$tags;
+}
+
+sub show_patrons {
+   foreach my $patname (sort keys %patron_variants) {
+      my $filename = "$patname variants";
+      $filename =~ s/\s+/_/g;
+      print $filename, "\n";
+      open my $F, '>', "zones/$filename" or die;
+      print $F qq[{| class="wikitable sortable"\n],
+         "|-\n",
+         "! Variant || Adventure || Campaign || Influence || Currency\n";
+
+      my $variants = $patron_variants{$patname};
+      @$variants = sort { $a->[3] <=> $b->[3] || $a->[4] <=> $b->[4]
+         || $a->[0] cmp $b->[0] } @$variants;
+      my $tot_infl = 0;
+      my $tot_curr = 0;
+      foreach my $var (@$variants) {
+         my ($name, $base, $camp, $infl, $curr) = @$var;
+         $tot_infl += $infl;
+         $tot_curr += $curr;
+         $infl = sci($infl);
+         $curr = commify($curr);
+         print $F "|-\n| [[$name]] || $base || $camp || $infl || $curr\n";
+      }
+
+      $tot_infl = sci($tot_infl);
+      $tot_curr = sci($tot_curr);
+      print $F "|-\n",
+         qq[| colspan="3" align="right" | Total || $tot_infl || $tot_curr\n],
+         "|}\n",
+         "[[Category:Patrons]]\n";
+      close $F;
+   }
 }
 
 sub show_enemies {
@@ -576,13 +611,19 @@ sub show_advent {
                warn "$adv->{name} $cond";
             }
          }
+         my %rewards;
          my @rewards = get_rewards($adv->{patron_rewards}{$patid}{$varid},
-            $adv->{name});
+            $adv->{name}, \%rewards);
 
          $n++;
          print $OUT "|patronname$n=$name\n";
          print $OUT "|patronobjectives$n=@obj\n" if @obj;
          print $OUT "|patronrewards$n=@rewards\n" if @rewards;
+
+         my $base = $advents->{$adv->{variant_adventure_id}};
+         push @{$patron_variants{$name}}, [ $adv->{name},
+            $base ? $base->{name} : '', $camp->{short_name},
+            $rewards{patron_influence} || 0, $rewards{patron_currency} || 0 ];
       }
    }
 
@@ -607,10 +648,11 @@ sub get_monsters {
 }
 
 sub get_rewards {
-   my ($rewards, $where) = @_;
+   my ($rewards, $where, $bytype) = @_;
    my @rewards;
    foreach my $reward (@$rewards) {
-      my $type = $reward->{reward};
+      my $type = $reward->{reward} or next;
+      $bytype->{$type} = $reward->{amount};
       if ($type eq 'red_rubies') {
          my $num = commify($reward->{amount});
          push @rewards, "{{Gems|size=32px|×$num}}";
