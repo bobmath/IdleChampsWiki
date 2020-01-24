@@ -403,6 +403,9 @@ sub do_upgrade {
    if (my $unlock = $upg->{_unlock}) {
       my $eff = $upg->{_effect};
       my $desc = colorize($eff->{_desc} ||= effect_string($hero, $eff));
+      if (my $extra = $eff->{_desc_extra}) {
+         $desc .= "\n" . $extra;
+      }
       do_unlock($hero, $upg, $unlock, 'Ability', $upg->{tip_text}, $desc);
    }
 }
@@ -485,10 +488,12 @@ sub do_effect {
       do_bonus($hero, $upg, 'Damage All', 'mul', $amt);
    }
    elsif ($key eq 'havilar_demon_sickness') {
-      do_havilar_sickness($hero, $upg, $eff);
+      $eff->{_params}{demon_sickness_description} =
+         do_extra_effects($hero, $upg, $eff, 551, 552, 553, 554);
    }
    elsif ($key eq 'havilar_leadership_summit') {
-      do_havilar_summit($hero, $upg, $eff);
+      $eff->{_params}{leadership_summit_description} =
+         do_extra_effects($hero, $upg, $eff, 546, 547, 548, 549);
    }
    elsif ($key eq 'health_add') {
       do_bonus($hero, $upg, 'Health', 'add', $amt);
@@ -513,32 +518,31 @@ sub do_effect {
    elsif ($key eq 'set_ultimate_attack') {
       do_ultimate($hero, $upg, $eff, $params->{attack_id});
    }
+   elsif ($key eq 'spurt_waspiration') {
+      $upg->{_effect}{_desc_extra} =
+         do_extra_effects($hero, $upg, $eff, @{$eff->{_params}{effect_ids}});
+   }
    elsif ($key eq 'wolfnut') {
       do_bonus($hero, $upg, $eff->{_col}, 'base', $amt, '');
       do_base_attack($hero, $upg, $eff, $params->{attack_id});
    }
 }
 
-sub do_havilar_summit {
-   my ($hero, $upg, $eff) = @_;
-   $eff->{_summit} = my $summit = parse_effect("effect_def,546,547,548,549");
+sub do_extra_effects {
+   my ($hero, $upg, $eff, @ids) = @_;
+   $eff->{_effects} = my $extra = parse_effect(join ',', 'effect_def', @ids);
    my $desc;
-   foreach my $effdef (@{$summit->{_effects}}) {
+   foreach my $effdef (@{$extra->{_effects}}) {
       my $effdesc = $effdef->{_desc} ||= effect_string($hero, $effdef);
-      $desc .= "\n* $effdesc";
+      $desc .= "\n* ";
+      my $props = $effdef->{properties};
+      $props = {} unless ref($props) eq 'HASH';
+      if (my $name = $props->{effect_name}) {
+         $desc .= $name . ": ";
+      }
+      $desc .= $effdesc;
    }
-   $eff->{_params}{leadership_summit_description} = $desc;
-}
-
-sub do_havilar_sickness {
-   my ($hero, $upg, $eff) = @_;
-   $eff->{_sickness} = my $sick = parse_effect("effect_def,551,552,553,554");
-   my $desc;
-   foreach my $effdef (@{$sick->{_effects}}) {
-      my $effdesc = $effdef->{_desc} ||= effect_string($hero, $effdef);
-      $desc .= "\n* $effdesc";
-   }
-   $eff->{_params}{demon_sickness_description} = $desc;
+   return $desc;
 }
 
 sub do_echo {
