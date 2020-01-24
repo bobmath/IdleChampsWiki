@@ -24,10 +24,10 @@ my %patron_coins = (
 );
 
 my %navtabs = (
-   1  => 'swordcoast',
-   2  => 'annihilation',
-   15 => 'waterdeep',
-   22 => 'baldursgate',
+   1  => 'SwordCoast',
+   2  => 'Annihilation',
+   15 => 'Waterdeep',
+   22 => 'BaldursGate',
 );
 
 my %formations = (
@@ -108,9 +108,15 @@ sub show_zones {
 
       open $OUT, '>:utf8', "zones/$filename" or die;
       my $navtab = $navtabs{$adv->{campaign_id}};
-      print $OUT "'''$adv->{name}''' is one of the [[adventures]] in the ",
-         ($navtab ?  "campaign [[$camp->{name}]].\n\n"
-            : "[[$camp->{name}]] event.\n\n");
+      if ($navtab) {
+         print $OUT "{{${navtab}Infobox}}\n",
+            "'''$adv->{name}''' is one of the [[adventures]] in the ",
+            "campaign [[$camp->{name}]].\n\n";
+      }
+      else {
+         print $OUT "'''$adv->{name}''' is one of the [[adventures]] in the ",
+            "[[$camp->{name}]] event.\n\n";
+      }
       show_advent($OUT, $adv);
 
       if (@$variants > 1) {
@@ -125,7 +131,7 @@ sub show_zones {
       show_waves($OUT, $adv, $set->{areas});
 
       if ($navtab) {
-         print $OUT "{{Navbox-Adventures|show=$navtab}}\n",
+         print $OUT "{{Navbox-Adventures|show=\L$navtab}}\n",
             "{{Navbox-IdleChampions}}\n",
             "[[Category:Adventures]]\n",
             "[[Category:$camp->{name}]]\n";
