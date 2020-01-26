@@ -130,7 +130,7 @@ sub show_zones {
 
       show_waves($OUT, $adv, $set->{areas});
 
-      my $sort = $adv->{name} =~ /^The\s+(.*)/ ? "|$1" : "";
+      my $sort = $adv->{name} =~ /^(The)\s+(.*)/ ? "|$2, $1" : "";
       if ($navtab) {
          print $OUT "{{Navbox-Adventures|show=\L$navtab}}\n",
             "{{Navbox-IdleChampions}}\n",
